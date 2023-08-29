@@ -1,0 +1,123 @@
+constant = unit
+         | integer-constant
+         ;
+
+unit = "()"
+     ;
+
+integer-constant = digit-excluding-zero, { digit }
+                 ;
+
+digit = "0" | digit-excluding-zero
+            ;
+
+digit-excluding-zero = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+                     ;
+
+identifier = letter, { letter | digit }
+           ;
+
+letter = ? All ASCII alphabetic characters ?
+       | "_"
+       ;
+
+primary-expr = identifier
+             | constant
+             | break-expr
+             | continue-expr
+             | "(", expr, ")"
+             ;
+
+
+postfix-expr = primary-expr
+             | function-call-expr
+             ;
+
+function-call-expr = identifier, "(", [ expr, { ",", expr }, [","] ], ")" ;
+
+prefix-expr = postfix-expr
+            | "-", prefix-expr
+            | "!", prefix-expr
+            ;
+
+product-expr = prefix-expr
+             | product-expr, "*", prefix-expr
+             | product-expr, "/", prefix-expr
+             ;
+
+factor-expr = product-expr
+            | factor-expr, "+", product-expr
+            | factor-expr, "-", product-expr
+            ;
+
+
+shift-expr = factor-expr
+           | shift-expr, "<<", factor-expr
+           | shift-expr, ">>", factor-expr
+           ;
+
+relational-expr = shift-expr
+                | relational-expr, "<", shift-expr
+                | relational-expr, ">", shift-expr
+                | relational-expr, "<=", shift-expr
+                | relational-expr, ">=", shift-expr
+                ;
+
+equality-expr = relational-expr
+              | equality-expr, "==", relational-expr
+              | equality-expr, "!=", relational-expr
+              ;
+
+assignment-expr = equality-expr
+                | identifier, "=", assignment-expr
+                ;
+
+statement-expr = equality-expr
+               | bind-expr
+               | if-expr
+               | for-expr
+               | function-expr
+               | declaration-expr
+               ;
+
+expr = statement-expr
+     | expr, ";"
+     ;
+
+bind-expr = identifier, ":=", expr
+          ;
+
+if-expr = "if", expr, "{", expr, "}", [ "else", else-clause ]
+        ;
+
+else-clause = if-expr
+            | "{", expr, "}"
+            ;
+
+for-expr = "for", expr, "{", { expr }, "}"
+           ;
+
+break-expr = "break", [ expr ]
+           ;
+
+continue-expr = "continue"
+              ;
+
+function-expr = "(", function-parameters, ")", [ "->", type ], "{", { expr }, "}"
+              ;
+
+function-parameters = [ function-parameter, { ",", function-parameter }, [","] ]
+                    ;
+
+function-parameter = identifier, ":", type
+                   ;
+
+type = "i32"
+     | "()"
+     ;
+
+declaration = identifier, "::", expr
+            ;
+
+program = declaration, { declaration }
+        ;
