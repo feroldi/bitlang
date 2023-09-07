@@ -35,6 +35,7 @@ impl Scanner<'_> {
 
         let token_kind = match self.bump() {
             Scanner::EOF_CHAR => return None,
+            ';' => TokenKind::Semi,
             ':' if self.peek() == ':' => {
                 self.bump();
 
@@ -87,6 +88,8 @@ impl Scanner<'_> {
         let ident_text = &self.source_code[ident_span_start.0..self.current_peek_pos.0];
 
         match ident_text {
+            "if" => TokenKind::Keyword(Keyword::If),
+            "else" => TokenKind::Keyword(Keyword::Else),
             "i32" => TokenKind::Keyword(Keyword::I32),
             _ => TokenKind::Identifier,
         }
@@ -135,6 +138,7 @@ pub(crate) enum TokenKind {
     LessEqual,
     GreaterEqual,
     ColonColon,
+    Semi,
     DashGreater,
     Keyword(Keyword),
     Open(Delim),
@@ -145,6 +149,8 @@ pub(crate) enum TokenKind {
 pub(crate) enum Keyword {
     Break,
     Continue,
+    If,
+    Else,
     I32,
 }
 

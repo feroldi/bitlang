@@ -116,7 +116,7 @@ type = "i32"
      | "()"
      ;
 
-declaration = identifier, "::", expr
+declaration = identifier, "::", statement-expr
             ;
 
 program = declaration, { declaration }

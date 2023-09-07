@@ -32,7 +32,7 @@ impl Parser<'_> {
         let op = self.consume()?;
         debug_assert_eq!(op.kind, TokenKind::ColonColon);
 
-        let expr = self.parse_expr()?;
+        let expr = self.parse_statement_expr()?;
 
         Some(Decl {
             identifier: self.source_code[ident_tok.span.start.0..ident_tok.span.end.0].to_owned(),
@@ -40,7 +40,7 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_expr(&mut self) -> Option<Expr> {
+    fn parse_statement_expr(&mut self) -> Option<Expr> {
         let tok = self.consume()?;
 
         match tok.kind {
@@ -49,9 +49,83 @@ impl Parser<'_> {
                     .parse::<i32>()
                     .unwrap(),
             })),
+            TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
             TokenKind::Open(Delim::Paren) => self.parse_function().map(Expr::Function),
             _ => None,
         }
+    }
+
+    fn parse_expr(&mut self) -> Option<Expr> {
+        let stmt_expr = self.parse_statement_expr()?;
+
+        if self.peek()?.kind == TokenKind::Semi {
+            self.consume()?;
+
+            Some(Expr::Semi(Box::new(stmt_expr)))
+        } else {
+            Some(stmt_expr)
+        }
+    }
+
+    fn parse_if_expr(&mut self) -> Option<Expr> {
+        let cond_expr = self.parse_expr()?;
+
+        let open_curly = self.consume()?;
+        debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+
+        let true_branch = self.parse_compound_exprs()?;
+
+        let closed_curly = self.consume()?;
+        debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+
+        let mut else_if_branches = vec![];
+
+        while self.peek()?.kind == TokenKind::Keyword(Keyword::Else) {
+            if self.look_ahead(1)?.kind != TokenKind::Keyword(Keyword::If) {
+                break;
+            }
+
+            self.consume()?;
+            self.consume()?;
+
+            let cond_expr = self.parse_expr()?;
+
+            let open_curly = self.consume()?;
+            debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+
+            let true_branch = self.parse_compound_exprs()?;
+
+            let closed_curly = self.consume()?;
+            debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+
+            else_if_branches.push(ElseIfBranch {
+                cond_expr,
+                true_branch,
+            });
+        }
+
+        let final_branch = if self.peek()?.kind == TokenKind::Keyword(Keyword::Else) {
+            self.consume()?;
+
+            let open_curly = self.consume()?;
+            debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+
+            let branch = self.parse_compound_exprs()?;
+
+            let closed_curly = self.consume()?;
+            debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+
+            Some(branch)
+        } else {
+            None
+        };
+
+        Some(Expr::If(IfExpr {
+            cond_expr: Box::new(cond_expr),
+            true_branch,
+            else_if_branches,
+            final_branch,
+        }))
     }
 
     fn parse_function(&mut self) -> Option<Function> {
@@ -74,14 +148,7 @@ impl Parser<'_> {
             Type::Unit
         };
 
-        let exprs = if self.peek()?.kind != TokenKind::Closed(Delim::Curly) {
-            match self.parse_expr() {
-                Some(expr) => vec![expr],
-                None => vec![],
-            }
-        } else {
-            vec![]
-        };
+        let exprs = self.parse_compound_exprs()?;
 
         let closed_curly = self.consume()?;
         debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
@@ -93,9 +160,30 @@ impl Parser<'_> {
         })
     }
 
+    fn parse_compound_exprs(&mut self) -> Option<Vec<Expr>> {
+        let mut exprs = vec![];
+
+        while self.peek()?.kind != TokenKind::Closed(Delim::Curly) {
+            let expr = self.parse_expr()?;
+            exprs.push(expr);
+        }
+
+        Some(exprs)
+    }
+
     fn peek(&self) -> Option<Token> {
         if self.current_token_idx < self.tokens.len() {
             Some(self.tokens[self.current_token_idx])
+        } else {
+            None
+        }
+    }
+
+    fn look_ahead(&self, amount: usize) -> Option<Token> {
+        let look_ahead_idx = self.current_token_idx + amount;
+
+        if look_ahead_idx < self.tokens.len() {
+            Some(self.tokens[look_ahead_idx])
         } else {
             None
         }
@@ -125,6 +213,8 @@ pub(crate) enum Expr {
     Identifier(String),
     Const(Const),
     Function(Function),
+    If(IfExpr),
+    Semi(Box<Expr>),
 }
 
 pub(crate) enum Const {
@@ -145,4 +235,16 @@ pub(crate) struct Param {
 pub(crate) enum Type {
     Unit,
     I32,
+}
+
+pub(crate) struct IfExpr {
+    pub(crate) cond_expr: Box<Expr>,
+    pub(crate) true_branch: Vec<Expr>,
+    pub(crate) else_if_branches: Vec<ElseIfBranch>,
+    pub(crate) final_branch: Option<Vec<Expr>>,
+}
+
+pub(crate) struct ElseIfBranch {
+    pub(crate) cond_expr: Expr,
+    pub(crate) true_branch: Vec<Expr>,
 }

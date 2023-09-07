@@ -9,8 +9,8 @@ pub(crate) fn compile(source_code: &str) -> String {
     let mut parser = Parser::new(source_code, tokens);
     let program = parser.parse_program().unwrap();
 
-    let codegen = CodeGen::new(program);
-    let x86_program = codegen.gen_program();
+    let mut codegen = CodeGen::new();
+    let x86_program = codegen.gen_program(program);
 
     format!("{}", x86_program)
 }
