@@ -1,19 +1,20 @@
+use crate::compiler_context::CompilerContext;
 use std::iter::Peekable;
 use std::str::Chars;
 
-pub(crate) struct Scanner<'s> {
-    source_code: &'s str,
-    char_stream: Peekable<Chars<'s>>,
+pub(crate) struct Scanner<'ctx> {
+    ctx: &'ctx CompilerContext,
+    char_stream: Peekable<Chars<'ctx>>,
     current_peek_pos: BytePos,
 }
 
 impl Scanner<'_> {
     const EOF_CHAR: char = '\0';
 
-    pub(crate) fn new(source_code: &str) -> Scanner {
+    pub(crate) fn new<'ctx>(ctx: &'ctx CompilerContext) -> Scanner {
         Scanner {
-            source_code,
-            char_stream: source_code.chars().peekable(),
+            ctx,
+            char_stream: ctx.get_source_code().chars().peekable(),
             current_peek_pos: BytePos(0),
         }
     }
@@ -85,7 +86,7 @@ impl Scanner<'_> {
             self.bump();
         }
 
-        let ident_text = &self.source_code[ident_span_start.0..self.current_peek_pos.0];
+        let ident_text = &self.ctx.get_source_code()[ident_span_start.0..self.current_peek_pos.0];
 
         match ident_text {
             "if" => TokenKind::Keyword(Keyword::If),

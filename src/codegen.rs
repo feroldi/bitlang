@@ -1,19 +1,24 @@
-use crate::parser::{Const, Decl, Expr, Function, Program};
+use crate::ast::{Const, Decl, Expr, Function, Program};
+use crate::compiler_context::CompilerContext;
 use std::fmt;
 
-pub(crate) struct CodeGen {
+pub(crate) struct CodeGen<'ctx> {
+    ctx: &'ctx CompilerContext,
     label_counter: u64,
 }
 
-impl CodeGen {
-    pub(crate) fn new() -> CodeGen {
-        CodeGen { label_counter: 0 }
+impl<'ctx> CodeGen<'ctx> {
+    pub(crate) fn new(ctx: &'ctx CompilerContext) -> CodeGen<'ctx> {
+        CodeGen {
+            ctx,
+            label_counter: 0,
+        }
     }
 
     pub(crate) fn gen_program(&mut self, program: Program) -> X86Program {
         let mut generated_insts = vec![];
 
-        for decl in &program.decls {
+        for decl in program.decls {
             generated_insts.extend(self.gen_decl(decl));
         }
 
@@ -24,10 +29,10 @@ impl CodeGen {
 
     fn gen_decl(&mut self, decl: &Decl) -> Vec<Inst> {
         let mut decl_insts = vec![Inst::Label {
-            name: decl.identifier.clone(),
+            name: decl.identifier.to_owned(),
         }];
 
-        let value_insts = self.parse_top_level_expr(&decl.value);
+        let value_insts = self.parse_top_level_expr(decl.value);
         decl_insts.extend(value_insts);
 
         decl_insts
@@ -73,17 +78,17 @@ impl CodeGen {
             }
             Expr::If(if_expr) => {
                 let (first_branch_insts, mut next_label) =
-                    self.gen_cond_and_branch(&if_expr.cond_expr, &if_expr.true_branch);
+                    self.gen_cond_and_branch(if_expr.cond_expr, if_expr.true_branch);
 
                 let mut branches_insts = vec![];
 
-                for branch in &if_expr.else_if_branches {
+                for branch in if_expr.else_if_branches {
                     let mut branch_insts = vec![];
 
                     branch_insts.push(Inst::Label { name: next_label });
 
                     let (cond_insts, je_label) =
-                        self.gen_cond_and_branch(&branch.cond_expr, &branch.true_branch);
+                        self.gen_cond_and_branch(branch.cond_expr, branch.true_branch);
 
                     branch_insts.extend(cond_insts);
                     branches_insts.push(branch_insts);
@@ -93,7 +98,7 @@ impl CodeGen {
 
                 let mut final_branch_insts = vec![];
 
-                if let Some(ref final_branch) = if_expr.final_branch {
+                if let Some(final_branch) = if_expr.final_branch {
                     final_branch_insts.push(Inst::Label { name: next_label });
                     next_label = self.make_label();
                     final_branch_insts.extend(self.gen_exprs(final_branch));

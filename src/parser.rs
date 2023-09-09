@@ -1,15 +1,17 @@
+use crate::ast::*;
+use crate::compiler_context::CompilerContext;
 use crate::scanner::{Delim, Keyword, Token, TokenKind};
 
-pub(crate) struct Parser<'s> {
-    source_code: &'s str,
+pub(crate) struct Parser<'ctx> {
+    ctx: &'ctx CompilerContext,
     tokens: Vec<Token>,
     current_token_idx: usize,
 }
 
-impl Parser<'_> {
-    pub(crate) fn new(source_code: &str, tokens: Vec<Token>) -> Parser {
+impl<'ctx> Parser<'ctx> {
+    pub(crate) fn new(tokens: Vec<Token>, ctx: &'ctx CompilerContext) -> Parser {
         Parser {
-            source_code,
+            ctx,
             tokens,
             current_token_idx: 0,
         }
@@ -22,10 +24,12 @@ impl Parser<'_> {
             decls.push(decl);
         }
 
-        Some(Program { decls })
+        Some(Program {
+            decls: self.ctx.alloc_slice_of_decl(&decls),
+        })
     }
 
-    fn parse_decl(&mut self) -> Option<Decl> {
+    fn parse_decl(&mut self) -> Option<Decl<'ctx>> {
         let ident_tok = self.consume()?;
         debug_assert_eq!(ident_tok.kind, TokenKind::Identifier);
 
@@ -34,40 +38,48 @@ impl Parser<'_> {
 
         let expr = self.parse_statement_expr()?;
 
+        let identifier = self.ctx.intern_ident(
+            &self.ctx.get_source_code()[ident_tok.span.start.0..ident_tok.span.end.0],
+        );
+
         Some(Decl {
-            identifier: self.source_code[ident_tok.span.start.0..ident_tok.span.end.0].to_owned(),
-            value: expr,
+            identifier,
+            value: self.ctx.alloc_expr(expr),
         })
     }
 
-    fn parse_statement_expr(&mut self) -> Option<Expr> {
+    fn parse_statement_expr(&mut self) -> Option<Expr<'ctx>> {
         let tok = self.consume()?;
 
         match tok.kind {
-            TokenKind::IntegerConstant => Some(Expr::Const(Const::IntegerConstant {
-                value: self.source_code[tok.span.start.0..tok.span.end.0]
-                    .parse::<i32>()
-                    .unwrap(),
-            })),
+            TokenKind::IntegerConstant => {
+                let expr = Expr::Const(Const::IntegerConstant {
+                    value: self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0]
+                        .parse::<i32>()
+                        .unwrap(),
+                });
+
+                Some(expr)
+            }
             TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
-            TokenKind::Open(Delim::Paren) => self.parse_function().map(Expr::Function),
+            TokenKind::Open(Delim::Paren) => self.parse_function(),
             _ => None,
         }
     }
 
-    fn parse_expr(&mut self) -> Option<Expr> {
+    fn parse_expr(&mut self) -> Option<Expr<'ctx>> {
         let stmt_expr = self.parse_statement_expr()?;
 
         if self.peek()?.kind == TokenKind::Semi {
             self.consume()?;
 
-            Some(Expr::Semi(Box::new(stmt_expr)))
+            Some(Expr::Semi(self.ctx.alloc_expr(stmt_expr)))
         } else {
             Some(stmt_expr)
         }
     }
 
-    fn parse_if_expr(&mut self) -> Option<Expr> {
+    fn parse_if_expr(&mut self) -> Option<Expr<'ctx>> {
         let cond_expr = self.parse_expr()?;
 
         let open_curly = self.consume()?;
@@ -99,7 +111,7 @@ impl Parser<'_> {
             debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
 
             else_if_branches.push(ElseIfBranch {
-                cond_expr,
+                cond_expr: self.ctx.alloc_expr(cond_expr),
                 true_branch,
             });
         }
@@ -121,14 +133,14 @@ impl Parser<'_> {
         };
 
         Some(Expr::If(IfExpr {
-            cond_expr: Box::new(cond_expr),
+            cond_expr: self.ctx.alloc_expr(cond_expr),
             true_branch,
-            else_if_branches,
+            else_if_branches: self.ctx.alloc_slice_of_else_if_branch(&else_if_branches),
             final_branch,
         }))
     }
 
-    fn parse_function(&mut self) -> Option<Function> {
+    fn parse_function(&mut self) -> Option<Expr<'ctx>> {
         let closed_paren = self.consume()?;
         debug_assert_eq!(closed_paren.kind, TokenKind::Closed(Delim::Paren));
 
@@ -153,14 +165,14 @@ impl Parser<'_> {
         let closed_curly = self.consume()?;
         debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
 
-        Some(Function {
+        Some(Expr::Function(Function {
             return_type,
-            parameters: vec![],
+            parameters: self.ctx.alloc_slice_of_param(&[]),
             body: exprs,
-        })
+        }))
     }
 
-    fn parse_compound_exprs(&mut self) -> Option<Vec<Expr>> {
+    fn parse_compound_exprs(&mut self) -> Option<&'ctx [Expr<'ctx>]> {
         let mut exprs = vec![];
 
         while self.peek()?.kind != TokenKind::Closed(Delim::Curly) {
@@ -168,7 +180,7 @@ impl Parser<'_> {
             exprs.push(expr);
         }
 
-        Some(exprs)
+        Some(self.ctx.alloc_slice_of_expr(&exprs))
     }
 
     fn peek(&self) -> Option<Token> {
@@ -198,53 +210,4 @@ impl Parser<'_> {
 
         peeked_tok
     }
-}
-
-pub(crate) struct Program {
-    pub(crate) decls: Vec<Decl>,
-}
-
-pub(crate) struct Decl {
-    pub(crate) identifier: String,
-    pub(crate) value: Expr,
-}
-
-pub(crate) enum Expr {
-    Identifier(String),
-    Const(Const),
-    Function(Function),
-    If(IfExpr),
-    Semi(Box<Expr>),
-}
-
-pub(crate) enum Const {
-    IntegerConstant { value: i32 },
-}
-
-pub(crate) struct Function {
-    return_type: Type,
-    parameters: Vec<Param>,
-    pub(crate) body: Vec<Expr>,
-}
-
-pub(crate) struct Param {
-    identifier: String,
-    ty: Type,
-}
-
-pub(crate) enum Type {
-    Unit,
-    I32,
-}
-
-pub(crate) struct IfExpr {
-    pub(crate) cond_expr: Box<Expr>,
-    pub(crate) true_branch: Vec<Expr>,
-    pub(crate) else_if_branches: Vec<ElseIfBranch>,
-    pub(crate) final_branch: Option<Vec<Expr>>,
-}
-
-pub(crate) struct ElseIfBranch {
-    pub(crate) cond_expr: Expr,
-    pub(crate) true_branch: Vec<Expr>,
 }

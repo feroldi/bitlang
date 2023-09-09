@@ -1,4 +1,6 @@
+mod ast;
 mod codegen;
+mod compiler_context;
 mod driver;
 mod parser;
 mod scanner;
