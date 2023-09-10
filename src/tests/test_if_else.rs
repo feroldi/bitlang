@@ -186,3 +186,49 @@ fn test_chained_if_else() {
         |"#,
     );
 }
+
+#[test]
+fn test_chained_if_else_without_final_else() {
+    let program = compile(
+        r#"
+        |main :: () -> i32 {
+        |    if 10 {
+        |        1
+        |    } else if 20 {
+        |        2
+        |    } else if 30 {
+        |        3
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |.main:
+        |    mov eax, 10
+        |    cmp eax, 0
+        |    je .L0
+        |    mov eax, 1
+        |    jmp .L2
+        |
+        |.L0:
+        |    mov eax, 20
+        |    cmp eax, 0
+        |    je .L1
+        |    mov eax, 2
+        |    jmp .L2
+        |
+        |.L1:
+        |    mov eax, 30
+        |    cmp eax, 0
+        |    je .L2
+        |    mov eax, 3
+        |    jmp .L2
+        |
+        |.L2:
+        |    ret
+        |"#,
+    );
+}

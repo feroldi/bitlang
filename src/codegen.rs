@@ -1,5 +1,6 @@
 use crate::ast::{Const, Decl, Expr, Function, Program};
 use crate::compiler_context::CompilerContext;
+use crate::interner::Symbol;
 use std::fmt;
 
 pub(crate) struct CodeGen<'ctx> {
@@ -23,13 +24,14 @@ impl<'ctx> CodeGen<'ctx> {
         }
 
         X86Program {
+            ctx: self.ctx,
             instructions: generated_insts,
         }
     }
 
     fn gen_decl(&mut self, decl: &Decl) -> Vec<Inst> {
         let mut decl_insts = vec![Inst::Label {
-            name: decl.identifier.to_owned(),
+            name: decl.identifier,
         }];
 
         let value_insts = self.parse_top_level_expr(decl.value);
@@ -110,16 +112,12 @@ impl<'ctx> CodeGen<'ctx> {
                 if_insts.extend(first_branch_insts);
 
                 if !branches_insts.is_empty() || !final_branch_insts.is_empty() {
-                    if_insts.push(Inst::Jmp {
-                        label: exit_label.clone(),
-                    });
+                    if_insts.push(Inst::Jmp { label: exit_label });
                 }
 
                 for branch_insts in branches_insts {
                     if_insts.extend(branch_insts);
-                    if_insts.push(Inst::Jmp {
-                        label: exit_label.clone(),
-                    });
+                    if_insts.push(Inst::Jmp { label: exit_label });
                 }
 
                 if !final_branch_insts.is_empty() {
@@ -134,7 +132,7 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
-    fn gen_cond_and_branch(&mut self, cond_expr: &Expr, branch: &[Expr]) -> (Vec<Inst>, String) {
+    fn gen_cond_and_branch(&mut self, cond_expr: &Expr, branch: &[Expr]) -> (Vec<Inst>, Symbol) {
         let mut insts = self.gen_expr(cond_expr);
 
         insts.push(Inst::Cmp {
@@ -144,7 +142,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         let next_branch_label = self.make_label();
         insts.push(Inst::Je {
-            label: next_branch_label.clone(),
+            label: next_branch_label,
         });
 
         insts.extend(self.gen_exprs(branch));
@@ -156,48 +154,66 @@ impl<'ctx> CodeGen<'ctx> {
         exprs.iter().flat_map(|e| self.gen_expr(e)).collect()
     }
 
-    fn make_label(&mut self) -> String {
+    fn make_label(&mut self) -> Symbol {
         let label_count = self.label_counter;
         self.label_counter += 1;
 
-        format!("L{}", label_count)
+        self.ctx.get_or_intern_str(&format!("L{}", label_count))
     }
 }
 
-pub(crate) struct X86Program {
+pub(crate) struct X86Program<'ctx> {
+    ctx: &'ctx CompilerContext,
     instructions: Vec<Inst>,
 }
 
+#[derive(Clone, Copy)]
 enum Inst {
-    Label { name: String },
+    Label { name: Symbol },
     Mov { target_reg: Reg, value: i32 },
     Cmp { reg: Reg, value: i32 },
-    Je { label: String },
-    Jmp { label: String },
+    Je { label: Symbol },
+    Jmp { label: Symbol },
     Ret,
 }
 
+#[derive(Clone, Copy)]
 enum Reg {
     Eax,
 }
 
-impl fmt::Display for X86Program {
+impl fmt::Display for X86Program<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.instructions
-            .iter()
-            .try_fold((), |_, inst| writeln!(f, "{}", inst))
+        for inst in &self.instructions {
+            let ctx_inst = CtxInst {
+                ctx: self.ctx,
+                inst: *inst,
+            };
+            writeln!(f, "{}", ctx_inst)?;
+        }
+
+        Ok(())
     }
 }
 
-impl fmt::Display for Inst {
+struct CtxInst<'ctx> {
+    ctx: &'ctx CompilerContext,
+    inst: Inst,
+}
+
+impl fmt::Display for CtxInst<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Inst::Label { name } => write!(f, ".{}:", name),
-            Inst::Mov { target_reg, value } => write!(f, "    mov {}, {}", target_reg, value),
-            Inst::Cmp { reg, value } => write!(f, "    cmp {}, {}", reg, value),
-            Inst::Je { label } => write!(f, "    je .{}", label),
-            Inst::Jmp { label } => write!(f, "    jmp .{}", label),
-            Inst::Ret => write!(f, "    ret"),
+        if !matches!(self.inst, Inst::Label { .. }) {
+            write!(f, "    ")?;
+        }
+
+        match self.inst {
+            Inst::Label { name } => write!(f, ".{}:", self.ctx.resolve_symbol(name)),
+            Inst::Mov { target_reg, value } => write!(f, "mov {}, {}", target_reg, value),
+            Inst::Cmp { reg, value } => write!(f, "cmp {}, {}", reg, value),
+            Inst::Je { label } => write!(f, "je .{}", self.ctx.resolve_symbol(label)),
+            Inst::Jmp { label } => write!(f, "jmp .{}", self.ctx.resolve_symbol(label)),
+            Inst::Ret => write!(f, "ret"),
         }
     }
 }

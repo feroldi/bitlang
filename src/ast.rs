@@ -1,3 +1,5 @@
+use crate::interner::Symbol;
+
 #[derive(Clone, Copy)]
 pub(crate) struct Program<'ctx> {
     pub(crate) decls: &'ctx [Decl<'ctx>],
@@ -5,7 +7,7 @@ pub(crate) struct Program<'ctx> {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Decl<'ctx> {
-    pub(crate) identifier: &'ctx str,
+    pub(crate) identifier: Symbol,
     pub(crate) value: &'ctx Expr<'ctx>,
 }
 

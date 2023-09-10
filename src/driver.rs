@@ -7,8 +7,10 @@ pub(crate) fn compile(source_code: &str) -> String {
     // FIXME: don't copy source code, move it.
     let context = CompilerContext::new(source_code.into());
 
-    let mut scanner = Scanner::new(&context);
-    let tokens = scanner.scan_all_tokens();
+    let tokens = {
+        let mut scanner = Scanner::new(&context);
+        scanner.scan_all_tokens()
+    };
 
     let mut parser = Parser::new(tokens, &context);
     let program = parser.parse_program().unwrap();

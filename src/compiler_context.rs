@@ -1,37 +1,39 @@
 use crate::ast::{Decl, ElseIfBranch, Expr, Param};
+use crate::interner::{StringInterner, Symbol};
 use bumpalo::Bump;
+use std::cell::RefCell;
 
 pub(crate) struct CompilerContext {
     source_code: String,
-    identifiers: Bump,
+    string_interner: RefCell<StringInterner>,
     exprs: Bump,
-    if_exprs: Bump,
     else_if_branches: Bump,
     params: Bump,
     decls: Bump,
-    consts: Bump,
 }
 
 impl<'ctx> CompilerContext {
     pub(crate) fn new(source_code: String) -> CompilerContext {
         CompilerContext {
             source_code,
-            identifiers: Default::default(),
+            string_interner: Default::default(),
             exprs: Default::default(),
-            if_exprs: Default::default(),
             else_if_branches: Default::default(),
             params: Default::default(),
             decls: Default::default(),
-            consts: Default::default(),
         }
     }
 
-    pub(crate) fn get_source_code(&self) -> &str {
+    pub(crate) fn get_source_code(&'ctx self) -> &str {
         &self.source_code
     }
 
-    pub(crate) fn intern_ident<'a>(&'ctx self, s: &'a str) -> &'ctx str {
-        self.identifiers.alloc_str(s)
+    pub(crate) fn get_or_intern_str(&'ctx self, string: &str) -> Symbol {
+        self.string_interner.borrow_mut().get_or_intern(string)
+    }
+
+    pub(crate) fn resolve_symbol(&'ctx self, symbol: Symbol) -> &'static str {
+        self.string_interner.borrow().resolve(symbol)
     }
 
     pub(crate) fn alloc_slice_of_decl<'a>(

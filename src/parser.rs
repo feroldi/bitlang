@@ -38,7 +38,7 @@ impl<'ctx> Parser<'ctx> {
 
         let expr = self.parse_statement_expr()?;
 
-        let identifier = self.ctx.intern_ident(
+        let identifier = self.ctx.get_or_intern_str(
             &self.ctx.get_source_code()[ident_tok.span.start.0..ident_tok.span.end.0],
         );
 
