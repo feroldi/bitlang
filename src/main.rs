@@ -1,5 +1,7 @@
 #![feature(hash_raw_entry, hasher_prefixfree_extras)]
 
+use crate::driver::compile;
+
 mod ast;
 mod codegen;
 mod compiler_context;
@@ -12,5 +14,5 @@ mod scanner;
 mod tests;
 
 fn main() {
-    println!("Hello, world!");
+    let _ = compile("main :: () {}");
 }

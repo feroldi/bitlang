@@ -18,6 +18,8 @@ fn test_if_else_with_basic_expressions() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 1
         |    cmp eax, 0
         |    je .L0
@@ -28,6 +30,7 @@ fn test_if_else_with_basic_expressions() {
         |    mov eax, 0
         |
         |.L1:
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -51,6 +54,8 @@ fn test_if_else_inside_another() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 1
         |    cmp eax, 0
         |    je .L0
@@ -66,6 +71,7 @@ fn test_if_else_inside_another() {
         |.L0:
         |    mov eax, 0
         |.L3:
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -89,12 +95,15 @@ fn test_if_without_else() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 1
         |    cmp eax, 0
         |    je .L0
         |    mov eax, 1
         |.L0:
         |    mov eax, 0
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -121,6 +130,8 @@ fn test_multi_exprs_inside_if_body() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 1
         |    cmp eax, 0
         |    je .L0
@@ -132,6 +143,7 @@ fn test_multi_exprs_inside_if_body() {
         |    mov eax, 4
         |    mov eax, 5
         |.L1:
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -159,6 +171,8 @@ fn test_chained_if_else() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 10
         |    cmp eax, 0
         |    je .L0
@@ -182,6 +196,7 @@ fn test_chained_if_else() {
         |.L2:
         |    mov eax, 4
         |.L3:
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -207,6 +222,8 @@ fn test_chained_if_else_without_final_else() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 10
         |    cmp eax, 0
         |    je .L0
@@ -228,6 +245,7 @@ fn test_chained_if_else_without_final_else() {
         |    jmp .L2
         |
         |.L2:
+        |    pop rbp
         |    ret
         |"#,
     );

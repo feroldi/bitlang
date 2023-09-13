@@ -12,7 +12,9 @@ fn test_main_empty_function_returns_0() {
         program,
         r#"
         |.main:
-        |    mov eax, 0
+        |    push rbp
+        |    mov rbp, rsp
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -32,7 +34,10 @@ fn test_main_function_explicitly_returns_0() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 0
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -52,7 +57,10 @@ fn test_main_function_explicitly_returns_1() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 1
+        |    pop rbp
         |    ret
         |"#,
     );
@@ -72,7 +80,10 @@ fn test_main_function_explicitly_returns_42() {
         program,
         r#"
         |.main:
+        |    push rbp
+        |    mov rbp, rsp
         |    mov eax, 42
+        |    pop rbp
         |    ret
         |"#,
     );

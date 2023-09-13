@@ -63,6 +63,29 @@ impl<'ctx> Parser<'ctx> {
             }
             TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
             TokenKind::Open(Delim::Paren) => self.parse_function(),
+            TokenKind::Identifier => {
+                if self.peek()?.kind == TokenKind::ColonEqual {
+                    self.consume()?;
+                    let value = self.parse_statement_expr()?;
+
+                    let identifier = self.ctx.get_or_intern_str(
+                        &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
+                    );
+
+                    Some(Expr::BindDef(BindDef {
+                        identifier,
+                        value: self.ctx.alloc_expr(value),
+                    }))
+                } else {
+                    let identifier = self.ctx.get_or_intern_str(
+                        &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
+                    );
+
+                    Some(Expr::BindRef(BindRef {
+                        identifier,
+                    }))
+                }
+            }
             _ => None,
         }
     }

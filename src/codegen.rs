@@ -1,11 +1,14 @@
 use crate::ast::{Const, Decl, Expr, Function, Program};
 use crate::compiler_context::CompilerContext;
 use crate::interner::Symbol;
+use std::collections::HashMap;
 use std::fmt;
 
 pub(crate) struct CodeGen<'ctx> {
     ctx: &'ctx CompilerContext,
     label_counter: u64,
+    allocated_stack_bytes: u64,
+    offset_by_bind_ref: HashMap<Symbol, u64>,
 }
 
 impl<'ctx> CodeGen<'ctx> {
@@ -13,6 +16,8 @@ impl<'ctx> CodeGen<'ctx> {
         CodeGen {
             ctx,
             label_counter: 0,
+            allocated_stack_bytes: 0,
+            offset_by_bind_ref: Default::default(),
         }
     }
 
@@ -48,25 +53,33 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     fn gen_function(&mut self, body: &[Expr]) -> Vec<Inst> {
-        if body.is_empty() {
-            vec![
-                Inst::Mov {
-                    target_reg: Reg::Eax,
-                    value: 0,
-                },
-                Inst::Ret,
-            ]
-        } else {
-            let mut body_insts = vec![];
+        let mut insts = vec![
+            Inst::Push { source: Reg::Rbp },
+            Inst::Mov {
+                target: Arg::Reg(Reg::Rbp),
+                source: Arg::Reg(Reg::Rsp),
+            },
+        ];
 
-            for expr in body {
-                body_insts.extend(self.gen_expr(expr));
-            }
-
-            body_insts.push(Inst::Ret);
-
-            body_insts
+        let mut body_insts = vec![];
+        for expr in body {
+            body_insts.extend(self.gen_expr(expr));
         }
+
+        body_insts.push(Inst::Pop { target: Reg::Rbp });
+        body_insts.push(Inst::Ret);
+
+        if self.allocated_stack_bytes != 0 {
+            // FIXME: Should not cast allocated_stack_bytes to i32.
+            insts.push(Inst::Sub {
+                target: Arg::Reg(Reg::Rsp),
+                source: Arg::Imm(self.allocated_stack_bytes as i32),
+            });
+        }
+
+        insts.extend(body_insts);
+
+        insts
     }
 
     fn gen_expr(&mut self, expr: &Expr) -> Vec<Inst> {
@@ -74,8 +87,8 @@ impl<'ctx> CodeGen<'ctx> {
             Expr::Semi(expr) => self.gen_expr(expr),
             Expr::Const(Const::IntegerConstant { value }) => {
                 vec![Inst::Mov {
-                    target_reg: Reg::Eax,
-                    value: *value,
+                    target: Arg::Reg(Reg::Eax),
+                    source: Arg::Imm(*value),
                 }]
             }
             Expr::If(if_expr) => {
@@ -128,6 +141,36 @@ impl<'ctx> CodeGen<'ctx> {
 
                 if_insts
             }
+            Expr::BindDef(bind_def) => {
+                let mut insts = self.gen_expr(bind_def.value);
+
+                self.allocated_stack_bytes += 4;
+
+                self.offset_by_bind_ref
+                    .insert(bind_def.identifier, self.allocated_stack_bytes);
+
+                insts.push(Inst::Mov {
+                    target: Arg::MemOffset {
+                        base: Reg::Rbp,
+                        // FIXME: Should not cast allocated_stack_bytes to i32.
+                        offset: -(self.allocated_stack_bytes as i32),
+                    },
+                    source: Arg::Reg(Reg::Eax),
+                });
+
+                insts
+            }
+            Expr::BindRef(bind_ref) => {
+                let bind_offset = self.offset_by_bind_ref.get(&bind_ref.identifier).unwrap();
+
+                vec![Inst::Mov {
+                    target: Arg::Reg(Reg::Eax),
+                    source: Arg::MemOffset {
+                        base: Reg::Rbp,
+                        offset: -(*bind_offset as i32),
+                    },
+                }]
+            }
             _ => todo!("other exprs"),
         }
     }
@@ -170,16 +213,28 @@ pub(crate) struct X86Program<'ctx> {
 #[derive(Clone, Copy)]
 enum Inst {
     Label { name: Symbol },
-    Mov { target_reg: Reg, value: i32 },
+    Mov { target: Arg, source: Arg },
     Cmp { reg: Reg, value: i32 },
     Je { label: Symbol },
     Jmp { label: Symbol },
     Ret,
+    Push { source: Reg },
+    Pop { target: Reg },
+    Sub { target: Arg, source: Arg },
+}
+
+#[derive(Clone, Copy)]
+enum Arg {
+    Imm(i32),
+    Reg(Reg),
+    MemOffset { base: Reg, offset: i32 },
 }
 
 #[derive(Clone, Copy)]
 enum Reg {
     Eax,
+    Rbp,
+    Rsp,
 }
 
 impl fmt::Display for X86Program<'_> {
@@ -209,11 +264,32 @@ impl fmt::Display for CtxInst<'_> {
 
         match self.inst {
             Inst::Label { name } => write!(f, ".{}:", self.ctx.resolve_symbol(name)),
-            Inst::Mov { target_reg, value } => write!(f, "mov {}, {}", target_reg, value),
+            Inst::Mov { target, source } => write!(f, "mov {}, {}", target, source),
             Inst::Cmp { reg, value } => write!(f, "cmp {}, {}", reg, value),
             Inst::Je { label } => write!(f, "je .{}", self.ctx.resolve_symbol(label)),
             Inst::Jmp { label } => write!(f, "jmp .{}", self.ctx.resolve_symbol(label)),
             Inst::Ret => write!(f, "ret"),
+            Inst::Push { source } => write!(f, "push {}", source),
+            Inst::Pop { target } => write!(f, "pop {}", target),
+            Inst::Sub { target, source } => write!(f, "sub {}, {}", target, source),
+        }
+    }
+}
+
+impl fmt::Display for Arg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Arg::Imm(value) => write!(f, "{}", value),
+            Arg::Reg(reg) => write!(f, "{}", reg),
+            Arg::MemOffset { base, offset } => {
+                write!(
+                    f,
+                    "DWORD PTR [{base}{sign}{offset}]",
+                    base = base,
+                    sign = if *offset >= 0 { "+" } else { "" },
+                    offset = offset
+                )
+            }
         }
     }
 }
@@ -222,6 +298,8 @@ impl fmt::Display for Reg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Reg::Eax => write!(f, "eax"),
+            Reg::Rbp => write!(f, "rbp"),
+            Reg::Rsp => write!(f, "rsp"),
         }
     }
 }

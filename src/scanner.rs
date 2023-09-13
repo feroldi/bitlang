@@ -37,10 +37,18 @@ impl Scanner<'_> {
         let token_kind = match self.bump() {
             Scanner::EOF_CHAR => return None,
             ';' => TokenKind::Semi,
-            ':' if self.peek() == ':' => {
-                self.bump();
+            ':' => {
+                if self.peek() == ':' {
+                    self.bump();
 
-                TokenKind::ColonColon
+                    TokenKind::ColonColon
+                } else if self.peek() == '=' {
+                    self.bump();
+
+                    TokenKind::ColonEqual
+                } else {
+                    TokenKind::Colon
+                }
             }
             '(' => TokenKind::Open(Delim::Paren),
             ')' => TokenKind::Closed(Delim::Paren),
@@ -138,7 +146,9 @@ pub(crate) enum TokenKind {
     GreaterGreater,
     LessEqual,
     GreaterEqual,
+    Colon,
     ColonColon,
+    ColonEqual,
     Semi,
     DashGreater,
     Keyword(Keyword),

@@ -1,7 +1,7 @@
 use bumpalo::Bump;
 use std::collections::HashMap;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct Symbol(usize);
 
 pub(crate) struct StringInterner {

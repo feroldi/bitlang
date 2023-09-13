@@ -2,6 +2,7 @@ use crate::driver;
 
 mod test_basic_programs;
 mod test_if_else;
+mod test_binding;
 
 fn compile(source_code: &str) -> String {
     driver::compile(&strip_margin(source_code))
