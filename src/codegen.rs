@@ -79,6 +79,11 @@ impl<'ctx> CodeGen<'ctx> {
 
         insts.extend(body_insts);
 
+        // FIXME: This is obviously temporary. We will need stack frames, because we have inner
+        // scopes, and those cannot simply clear the current stack frame.
+        self.allocated_stack_bytes = 0;
+        self.offset_by_bind_ref.clear();
+
         insts
     }
 
