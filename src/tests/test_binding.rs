@@ -24,6 +24,7 @@ fn test_bind_to_primary_expr_and_return_from_function() {
         |
         |    mov eax, DWORD PTR [rbp-4]
         |
+        |    add rsp, 4
         |    pop rbp
         |    ret
         |"#,
@@ -67,6 +68,7 @@ fn test_allocate_stack_according_to_how_many_bindings_there_are_and_ref_then_bac
         |
         |    mov eax, DWORD PTR [rbp-8]
         |
+        |    add rsp, 16
         |    pop rbp
         |    ret
         |"#,
@@ -106,6 +108,7 @@ fn test_allocate_stack_for_many_functions() {
         |    mov eax, 314
         |    mov DWORD PTR [rbp-8], eax
         |    mov eax, DWORD PTR [rbp-4]
+        |    add rsp, 8
         |    pop rbp
         |    ret
         |
@@ -120,6 +123,7 @@ fn test_allocate_stack_for_many_functions() {
         |    mov eax, 3
         |    mov DWORD PTR [rbp-12], eax
         |    mov eax, DWORD PTR [rbp-4]
+        |    add rsp, 12
         |    pop rbp
         |    ret
         |"#,

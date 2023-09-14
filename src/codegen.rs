@@ -66,16 +66,22 @@ impl<'ctx> CodeGen<'ctx> {
             body_insts.extend(self.gen_expr(expr));
         }
 
-        body_insts.push(Inst::Pop { target: Reg::Rbp });
-        body_insts.push(Inst::Ret);
-
         if self.allocated_stack_bytes != 0 {
             // FIXME: Should not cast allocated_stack_bytes to i32.
             insts.push(Inst::Sub {
                 target: Arg::Reg(Reg::Rsp),
                 source: Arg::Imm(self.allocated_stack_bytes as i32),
             });
+
+            // FIXME: Should not cast allocated_stack_bytes to i32.
+            body_insts.push(Inst::Add {
+                target: Arg::Reg(Reg::Rsp),
+                source: Arg::Imm(self.allocated_stack_bytes as i32),
+            });
         }
+
+        body_insts.push(Inst::Pop { target: Reg::Rbp });
+        body_insts.push(Inst::Ret);
 
         insts.extend(body_insts);
 
@@ -226,6 +232,7 @@ enum Inst {
     Push { source: Reg },
     Pop { target: Reg },
     Sub { target: Arg, source: Arg },
+    Add { target: Arg, source: Arg },
 }
 
 #[derive(Clone, Copy)]
@@ -277,6 +284,7 @@ impl fmt::Display for CtxInst<'_> {
             Inst::Push { source } => write!(f, "push {}", source),
             Inst::Pop { target } => write!(f, "pop {}", target),
             Inst::Sub { target, source } => write!(f, "sub {}, {}", target, source),
+            Inst::Add { target, source } => write!(f, "add {}, {}", target, source),
         }
     }
 }
