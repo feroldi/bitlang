@@ -129,3 +129,58 @@ fn test_allocate_stack_for_many_functions() {
         |"#,
     );
 }
+
+#[test]
+fn test_allocate_stack_for_inner_scopes() {
+    let program = compile(
+        r#"
+        |func :: () -> i32 {
+        |    foo := 1;
+        |
+        |    {
+        |        quxx := 2;
+        |        foo := 3;
+        |
+        |        foo
+        |    }
+        |
+        |    quxx := 4;
+        |
+        |    foo;
+        |    quxx
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |.func:
+        |    push rbp
+        |    mov rbp, rsp
+        |    sub rsp, 16
+        |
+        |    mov eax, 1
+        |    mov DWORD PTR [rbp-4], eax
+        |
+        |    mov eax, 2
+        |    mov DWORD PTR [rbp-8], eax
+        |
+        |    mov eax, 3
+        |    mov DWORD PTR [rbp-12], eax
+        |
+        |    mov eax, DWORD PTR [rbp-12]
+        |
+        |    mov eax, 4
+        |    mov DWORD PTR [rbp-16], eax
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |
+        |    mov eax, DWORD PTR [rbp-16]
+        |
+        |    add rsp, 16
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}

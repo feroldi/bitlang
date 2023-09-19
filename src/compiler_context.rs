@@ -65,8 +65,8 @@ impl<'ctx> CompilerContext {
 
     pub(crate) fn alloc_slice_of_param<'a>(
         &'ctx self,
-        params: &'a [Param<'ctx>],
-    ) -> &'ctx [Param<'ctx>] {
+        params: &'a [Param],
+    ) -> &'ctx [Param] {
         self.params.alloc_slice_copy(params)
     }
 }

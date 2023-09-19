@@ -18,6 +18,7 @@ pub(crate) enum Expr<'ctx> {
     BindDef(BindDef<'ctx>),
     Function(Function<'ctx>),
     If(IfExpr<'ctx>),
+    Compound(CompoundExpr<'ctx>),
     Semi(&'ctx Expr<'ctx>),
 }
 
@@ -40,13 +41,13 @@ pub(crate) struct BindDef<'ctx> {
 #[derive(Clone, Copy)]
 pub(crate) struct Function<'ctx> {
     pub(crate) return_type: Type,
-    pub(crate) parameters: &'ctx [Param<'ctx>],
-    pub(crate) body: &'ctx [Expr<'ctx>],
+    pub(crate) parameters: &'ctx [Param],
+    pub(crate) body: CompoundExpr<'ctx>,
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Param<'ctx> {
-    identifier: &'ctx str,
+pub(crate) struct Param {
+    identifier: Symbol,
     ty: Type,
 }
 
@@ -59,13 +60,20 @@ pub(crate) enum Type {
 #[derive(Clone, Copy)]
 pub(crate) struct IfExpr<'ctx> {
     pub(crate) cond_expr: &'ctx Expr<'ctx>,
-    pub(crate) true_branch: &'ctx [Expr<'ctx>],
+    pub(crate) true_branch: CompoundExpr<'ctx>,
     pub(crate) else_if_branches: &'ctx [ElseIfBranch<'ctx>],
-    pub(crate) final_branch: Option<&'ctx [Expr<'ctx>]>,
+    pub(crate) final_branch: Option<CompoundExpr<'ctx>>,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct ElseIfBranch<'ctx> {
     pub(crate) cond_expr: &'ctx Expr<'ctx>,
-    pub(crate) true_branch: &'ctx [Expr<'ctx>],
+    pub(crate) true_branch: CompoundExpr<'ctx>,
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct CompoundExpr<'ctx> {
+    pub(crate) exprs: &'ctx [Expr<'ctx>],
+}
+
+

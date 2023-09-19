@@ -63,6 +63,7 @@ impl<'ctx> Parser<'ctx> {
             }
             TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
             TokenKind::Open(Delim::Paren) => self.parse_function(),
+            TokenKind::Open(Delim::Curly) => self.parse_compound_expr(tok).map(Expr::Compound),
             TokenKind::Identifier => {
                 if self.peek()?.kind == TokenKind::ColonEqual {
                     self.consume()?;
@@ -103,13 +104,10 @@ impl<'ctx> Parser<'ctx> {
     fn parse_if_expr(&mut self) -> Option<Expr<'ctx>> {
         let cond_expr = self.parse_expr()?;
 
-        let open_curly = self.consume()?;
-        debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+        let open_curly_tok = self.consume()?;
+        debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
 
-        let true_branch = self.parse_compound_exprs()?;
-
-        let closed_curly = self.consume()?;
-        debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+        let true_branch = self.parse_compound_expr(open_curly_tok)?;
 
         let mut else_if_branches = vec![];
 
@@ -123,13 +121,10 @@ impl<'ctx> Parser<'ctx> {
 
             let cond_expr = self.parse_expr()?;
 
-            let open_curly = self.consume()?;
-            debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+            let open_curly_tok = self.consume()?;
+            debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
 
-            let true_branch = self.parse_compound_exprs()?;
-
-            let closed_curly = self.consume()?;
-            debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+            let true_branch = self.parse_compound_expr(open_curly_tok)?;
 
             else_if_branches.push(ElseIfBranch {
                 cond_expr: self.ctx.alloc_expr(cond_expr),
@@ -140,13 +135,10 @@ impl<'ctx> Parser<'ctx> {
         let final_branch = if self.peek()?.kind == TokenKind::Keyword(Keyword::Else) {
             self.consume()?;
 
-            let open_curly = self.consume()?;
-            debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+            let open_curly_tok = self.consume()?;
+            debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
 
-            let branch = self.parse_compound_exprs()?;
-
-            let closed_curly = self.consume()?;
-            debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+            let branch = self.parse_compound_expr(open_curly_tok)?;
 
             Some(branch)
         } else {
@@ -165,35 +157,35 @@ impl<'ctx> Parser<'ctx> {
         let closed_paren = self.consume()?;
         debug_assert_eq!(closed_paren.kind, TokenKind::Closed(Delim::Paren));
 
-        let next_tok = self.consume()?;
+        let (return_type, open_curly_tok) = if self.peek()?.kind == TokenKind::DashGreater {
+            self.consume()?;
 
-        let return_type = if next_tok.kind == TokenKind::DashGreater {
             let type_tok = self.consume()?;
             debug_assert_eq!(type_tok.kind, TokenKind::Keyword(Keyword::I32));
 
-            let open_curly = self.consume()?;
-            debug_assert_eq!(open_curly.kind, TokenKind::Open(Delim::Curly));
+            let open_curly_tok = self.consume()?;
+            debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
 
-            Type::I32
+            (Type::I32, open_curly_tok)
         } else {
-            debug_assert_eq!(next_tok.kind, TokenKind::Open(Delim::Curly));
+            let open_curly_tok = self.consume()?;
+            debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
 
-            Type::Unit
+            (Type::Unit, open_curly_tok)
         };
 
-        let exprs = self.parse_compound_exprs()?;
-
-        let closed_curly = self.consume()?;
-        debug_assert_eq!(closed_curly.kind, TokenKind::Closed(Delim::Curly));
+        let compound_expr = self.parse_compound_expr(open_curly_tok)?;
 
         Some(Expr::Function(Function {
             return_type,
             parameters: self.ctx.alloc_slice_of_param(&[]),
-            body: exprs,
+            body: compound_expr,
         }))
     }
 
-    fn parse_compound_exprs(&mut self) -> Option<&'ctx [Expr<'ctx>]> {
+    fn parse_compound_expr(&mut self, open_curly_tok: Token) -> Option<CompoundExpr<'ctx>> {
+        debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
+
         let mut exprs = vec![];
 
         while self.peek()?.kind != TokenKind::Closed(Delim::Curly) {
@@ -201,7 +193,10 @@ impl<'ctx> Parser<'ctx> {
             exprs.push(expr);
         }
 
-        Some(self.ctx.alloc_slice_of_expr(&exprs))
+        let closed_curly_tok = self.consume()?;
+        debug_assert_eq!(closed_curly_tok.kind, TokenKind::Closed(Delim::Curly));
+
+        Some(CompoundExpr { exprs: self.ctx.alloc_slice_of_expr(&exprs) })
     }
 
     fn peek(&self) -> Option<Token> {

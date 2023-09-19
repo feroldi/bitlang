@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program};
+use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program, CompoundExpr};
 use crate::compiler_context::CompilerContext;
 use crate::interner::Symbol;
 
 pub(crate) struct CodeGen<'ctx> {
     ctx: &'ctx CompilerContext,
     label_counter: u64,
-    allocated_stack_bytes: u64,
-    offset_by_bind_ref: HashMap<Symbol, u64>,
+    allocated_stack_bytes: usize,
+    scope_stack: Vec<HashMap<Symbol, usize>>,
 }
 
 impl<'ctx> CodeGen<'ctx> {
@@ -18,7 +18,7 @@ impl<'ctx> CodeGen<'ctx> {
             ctx,
             label_counter: 0,
             allocated_stack_bytes: 0,
-            offset_by_bind_ref: Default::default(),
+            scope_stack: vec![],
         }
     }
 
@@ -48,12 +48,14 @@ impl<'ctx> CodeGen<'ctx> {
 
     fn parse_top_level_expr(&mut self, expr: &Expr) -> Vec<Inst> {
         match expr {
-            Expr::Function(Function { body, .. }) => self.gen_function(body),
+            Expr::Function(Function { body, .. }) => self.gen_function(*body),
             _ => todo!("other top-level exprs"),
         }
     }
 
-    fn gen_function(&mut self, body: &[Expr]) -> Vec<Inst> {
+    fn gen_function(&mut self, body: CompoundExpr) -> Vec<Inst> {
+        self.enter_scope();
+
         let mut insts = vec![
             Inst::Push { source: Reg::Rbp },
             Inst::Mov {
@@ -62,10 +64,7 @@ impl<'ctx> CodeGen<'ctx> {
             },
         ];
 
-        let mut body_insts = vec![];
-        for expr in body {
-            body_insts.extend(self.gen_expr(expr));
-        }
+        let mut body_insts = self.gen_compound_expr(body);
 
         if self.allocated_stack_bytes != 0 {
             // FIXME: Should not cast allocated_stack_bytes to i32.
@@ -86,11 +85,7 @@ impl<'ctx> CodeGen<'ctx> {
 
         insts.extend(body_insts);
 
-        // FIXME: This is obviously temporary. We will need stack frames, because we
-        // have inner scopes, and those cannot simply clear the current stack
-        // frame.
-        self.allocated_stack_bytes = 0;
-        self.offset_by_bind_ref.clear();
+        self.exit_scope();
 
         insts
     }
@@ -102,7 +97,8 @@ impl<'ctx> CodeGen<'ctx> {
             Expr::If(if_expr) => self.gen_if_expr(*if_expr),
             Expr::BindDef(bind_def) => self.gen_bind_def_expr(*bind_def),
             Expr::BindRef(bind_ref) => self.gen_bind_ref_expr(*bind_ref),
-            Expr::Function(_) => unimplemented!()
+            Expr::Compound(compound_expr) => self.gen_compound_expr(*compound_expr),
+            Expr::Function(_) => unimplemented!(),
         }
     }
 
@@ -142,7 +138,7 @@ impl<'ctx> CodeGen<'ctx> {
         if let Some(final_branch) = if_expr.final_branch {
             final_branch_insts.push(Inst::Label { name: next_label });
             next_label = self.make_label();
-            final_branch_insts.extend(self.gen_exprs(final_branch));
+            final_branch_insts.extend(self.gen_compound_expr(final_branch));
         }
 
         let mut if_insts = vec![];
@@ -168,7 +164,7 @@ impl<'ctx> CodeGen<'ctx> {
         if_insts
     }
 
-    fn gen_cond_and_branch(&mut self, cond_expr: &Expr, branch: &[Expr]) -> (Vec<Inst>, Symbol) {
+    fn gen_cond_and_branch(&mut self, cond_expr: &Expr, branch: CompoundExpr) -> (Vec<Inst>, Symbol) {
         let mut insts = self.gen_expr(cond_expr);
 
         insts.push(Inst::Cmp {
@@ -181,7 +177,7 @@ impl<'ctx> CodeGen<'ctx> {
             label: next_branch_label,
         });
 
-        insts.extend(self.gen_exprs(branch));
+        insts.extend(self.gen_compound_expr(branch));
 
         (insts, next_branch_label)
     }
@@ -189,16 +185,13 @@ impl<'ctx> CodeGen<'ctx> {
     fn gen_bind_def_expr(&mut self, bind_def: BindDef) -> Vec<Inst> {
         let mut insts = self.gen_expr(bind_def.value);
 
-        self.allocated_stack_bytes += 4;
-
-        self.offset_by_bind_ref
-            .insert(bind_def.identifier, self.allocated_stack_bytes);
+        let offset = self.insert_in_scope(bind_def);
 
         insts.push(Inst::Mov {
             target: Arg::MemOffset {
                 base: Reg::Rbp,
                 // FIXME: Should not cast allocated_stack_bytes to i32.
-                offset: -(self.allocated_stack_bytes as i32),
+                offset: -(offset as i32),
             },
             source: Arg::Reg(Reg::Eax),
         });
@@ -207,19 +200,23 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     fn gen_bind_ref_expr(&mut self, bind_ref: BindRef) -> Vec<Inst> {
-        let bind_offset = self.offset_by_bind_ref.get(&bind_ref.identifier).unwrap();
+        let bind_offset = self.get_in_scope(bind_ref);
 
         vec![Inst::Mov {
             target: Arg::Reg(Reg::Eax),
             source: Arg::MemOffset {
                 base: Reg::Rbp,
-                offset: -(*bind_offset as i32),
+                offset: -(bind_offset as i32),
             },
         }]
     }
 
-    fn gen_exprs(&mut self, exprs: &[Expr]) -> Vec<Inst> {
-        exprs.iter().flat_map(|e| self.gen_expr(e)).collect()
+    fn gen_compound_expr(&mut self, compound_expr: CompoundExpr) -> Vec<Inst> {
+        self.enter_scope();
+        let insts = compound_expr.exprs.iter().flat_map(|e| self.gen_expr(e)).collect();
+        self.exit_scope();
+
+        insts
     }
 
     fn make_label(&mut self) -> Symbol {
@@ -227,6 +224,29 @@ impl<'ctx> CodeGen<'ctx> {
         self.label_counter += 1;
 
         self.ctx.get_or_intern_str(&format!("L{}", label_count))
+    }
+
+    fn enter_scope(&mut self) {
+        self.scope_stack.push(HashMap::default());
+    }
+
+    fn exit_scope(&mut self) {
+        self.scope_stack.pop();
+
+        if self.scope_stack.is_empty() {
+            self.allocated_stack_bytes = 0;
+        }
+    }
+
+    fn insert_in_scope(&mut self, bind_def: BindDef) -> usize {
+        self.allocated_stack_bytes += 4;
+        self.scope_stack.last_mut().unwrap().insert(bind_def.identifier, self.allocated_stack_bytes);
+
+        self.allocated_stack_bytes
+    }
+
+    fn get_in_scope(&self, bind_ref: BindRef) -> usize {
+        *self.scope_stack.last().unwrap().get(&bind_ref.identifier).unwrap()
     }
 }
 
