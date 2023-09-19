@@ -1,8 +1,9 @@
-use crate::ast::{Const, Decl, Expr, Function, Program};
-use crate::compiler_context::CompilerContext;
-use crate::interner::Symbol;
 use std::collections::HashMap;
 use std::fmt;
+
+use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program};
+use crate::compiler_context::CompilerContext;
+use crate::interner::Symbol;
 
 pub(crate) struct CodeGen<'ctx> {
     ctx: &'ctx CompilerContext,
@@ -85,8 +86,9 @@ impl<'ctx> CodeGen<'ctx> {
 
         insts.extend(body_insts);
 
-        // FIXME: This is obviously temporary. We will need stack frames, because we have inner
-        // scopes, and those cannot simply clear the current stack frame.
+        // FIXME: This is obviously temporary. We will need stack frames, because we
+        // have inner scopes, and those cannot simply clear the current stack
+        // frame.
         self.allocated_stack_bytes = 0;
         self.offset_by_bind_ref.clear();
 
@@ -96,94 +98,74 @@ impl<'ctx> CodeGen<'ctx> {
     fn gen_expr(&mut self, expr: &Expr) -> Vec<Inst> {
         match expr {
             Expr::Semi(expr) => self.gen_expr(expr),
-            Expr::Const(Const::IntegerConstant { value }) => {
-                vec![Inst::Mov {
-                    target: Arg::Reg(Reg::Eax),
-                    source: Arg::Imm(*value),
-                }]
-            }
-            Expr::If(if_expr) => {
-                let (first_branch_insts, mut next_label) =
-                    self.gen_cond_and_branch(if_expr.cond_expr, if_expr.true_branch);
-
-                let mut branches_insts = vec![];
-
-                for branch in if_expr.else_if_branches {
-                    let mut branch_insts = vec![];
-
-                    branch_insts.push(Inst::Label { name: next_label });
-
-                    let (cond_insts, je_label) =
-                        self.gen_cond_and_branch(branch.cond_expr, branch.true_branch);
-
-                    branch_insts.extend(cond_insts);
-                    branches_insts.push(branch_insts);
-
-                    next_label = je_label;
-                }
-
-                let mut final_branch_insts = vec![];
-
-                if let Some(final_branch) = if_expr.final_branch {
-                    final_branch_insts.push(Inst::Label { name: next_label });
-                    next_label = self.make_label();
-                    final_branch_insts.extend(self.gen_exprs(final_branch));
-                }
-
-                let mut if_insts = vec![];
-                let exit_label = next_label;
-
-                if_insts.extend(first_branch_insts);
-
-                if !branches_insts.is_empty() || !final_branch_insts.is_empty() {
-                    if_insts.push(Inst::Jmp { label: exit_label });
-                }
-
-                for branch_insts in branches_insts {
-                    if_insts.extend(branch_insts);
-                    if_insts.push(Inst::Jmp { label: exit_label });
-                }
-
-                if !final_branch_insts.is_empty() {
-                    if_insts.extend(final_branch_insts);
-                }
-
-                if_insts.push(Inst::Label { name: exit_label });
-
-                if_insts
-            }
-            Expr::BindDef(bind_def) => {
-                let mut insts = self.gen_expr(bind_def.value);
-
-                self.allocated_stack_bytes += 4;
-
-                self.offset_by_bind_ref
-                    .insert(bind_def.identifier, self.allocated_stack_bytes);
-
-                insts.push(Inst::Mov {
-                    target: Arg::MemOffset {
-                        base: Reg::Rbp,
-                        // FIXME: Should not cast allocated_stack_bytes to i32.
-                        offset: -(self.allocated_stack_bytes as i32),
-                    },
-                    source: Arg::Reg(Reg::Eax),
-                });
-
-                insts
-            }
-            Expr::BindRef(bind_ref) => {
-                let bind_offset = self.offset_by_bind_ref.get(&bind_ref.identifier).unwrap();
-
-                vec![Inst::Mov {
-                    target: Arg::Reg(Reg::Eax),
-                    source: Arg::MemOffset {
-                        base: Reg::Rbp,
-                        offset: -(*bind_offset as i32),
-                    },
-                }]
-            }
-            _ => todo!("other exprs"),
+            Expr::Const(constant) => self.gen_constant_expr(*constant),
+            Expr::If(if_expr) => self.gen_if_expr(*if_expr),
+            Expr::BindDef(bind_def) => self.gen_bind_def_expr(*bind_def),
+            Expr::BindRef(bind_ref) => self.gen_bind_ref_expr(*bind_ref),
+            Expr::Function(_) => unimplemented!()
         }
+    }
+
+    fn gen_constant_expr(&self, constant: Const) -> Vec<Inst> {
+        match constant {
+            Const::IntegerConstant { value } => {
+                vec![Inst::Mov {
+                    target: Arg::Reg(Reg::Eax),
+                    source: Arg::Imm(value),
+                }]
+            }
+        }
+    }
+
+    fn gen_if_expr(&mut self, if_expr: IfExpr) -> Vec<Inst> {
+        let (first_branch_insts, mut next_label) =
+            self.gen_cond_and_branch(if_expr.cond_expr, if_expr.true_branch);
+
+        let mut branches_insts = vec![];
+
+        for branch in if_expr.else_if_branches {
+            let mut branch_insts = vec![];
+
+            branch_insts.push(Inst::Label { name: next_label });
+
+            let (cond_insts, je_label) =
+                self.gen_cond_and_branch(branch.cond_expr, branch.true_branch);
+
+            branch_insts.extend(cond_insts);
+            branches_insts.push(branch_insts);
+
+            next_label = je_label;
+        }
+
+        let mut final_branch_insts = vec![];
+
+        if let Some(final_branch) = if_expr.final_branch {
+            final_branch_insts.push(Inst::Label { name: next_label });
+            next_label = self.make_label();
+            final_branch_insts.extend(self.gen_exprs(final_branch));
+        }
+
+        let mut if_insts = vec![];
+        let exit_label = next_label;
+
+        if_insts.extend(first_branch_insts);
+
+        if !branches_insts.is_empty() || !final_branch_insts.is_empty() {
+            if_insts.push(Inst::Jmp { label: exit_label });
+        }
+
+        for branch_insts in branches_insts {
+            if_insts.extend(branch_insts);
+            if_insts.push(Inst::Jmp { label: exit_label });
+        }
+
+        if !final_branch_insts.is_empty() {
+            if_insts.extend(final_branch_insts);
+        }
+
+        if_insts.push(Inst::Label { name: exit_label });
+
+        if_insts
     }
 
     fn gen_cond_and_branch(&mut self, cond_expr: &Expr, branch: &[Expr]) -> (Vec<Inst>, Symbol) {
@@ -202,6 +184,38 @@ impl<'ctx> CodeGen<'ctx> {
         insts.extend(self.gen_exprs(branch));
 
         (insts, next_branch_label)
+    }
+
+    fn gen_bind_def_expr(&mut self, bind_def: BindDef) -> Vec<Inst> {
+        let mut insts = self.gen_expr(bind_def.value);
+
+        self.allocated_stack_bytes += 4;
+
+        self.offset_by_bind_ref
+            .insert(bind_def.identifier, self.allocated_stack_bytes);
+
+        insts.push(Inst::Mov {
+            target: Arg::MemOffset {
+                base: Reg::Rbp,
+                // FIXME: Should not cast allocated_stack_bytes to i32.
+                offset: -(self.allocated_stack_bytes as i32),
+            },
+            source: Arg::Reg(Reg::Eax),
+        });
+
+        insts
+    }
+
+    fn gen_bind_ref_expr(&mut self, bind_ref: BindRef) -> Vec<Inst> {
+        let bind_offset = self.offset_by_bind_ref.get(&bind_ref.identifier).unwrap();
+
+        vec![Inst::Mov {
+            target: Arg::Reg(Reg::Eax),
+            source: Arg::MemOffset {
+                base: Reg::Rbp,
+                offset: -(*bind_offset as i32),
+            },
+        }]
     }
 
     fn gen_exprs(&mut self, exprs: &[Expr]) -> Vec<Inst> {
