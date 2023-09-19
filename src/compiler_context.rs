@@ -1,7 +1,9 @@
+use std::cell::RefCell;
+
+use bumpalo::Bump;
+
 use crate::ast::{Decl, ElseIfBranch, Expr, Param};
 use crate::interner::{StringInterner, Symbol};
-use bumpalo::Bump;
-use std::cell::RefCell;
 
 pub(crate) struct CompilerContext {
     source_code: String,

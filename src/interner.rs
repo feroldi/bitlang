@@ -1,5 +1,6 @@
-use bumpalo::Bump;
 use std::collections::HashMap;
+
+use bumpalo::Bump;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct Symbol(usize);
@@ -67,8 +68,8 @@ impl StringInterner {
 
     pub(crate) fn resolve(&self, symbol: Symbol) -> &'static str {
         unsafe {
-            // SAFETY: All symbols are guaranteed to have been created by us, so there's no need to
-            // check whether the symbol is valid.
+            // SAFETY: All symbols are guaranteed to have been created by us, so there's no
+            // need to check whether the symbol is valid.
             self.indexed_strs.get_unchecked(symbol.0)
         }
     }

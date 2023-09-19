@@ -1,6 +1,7 @@
-use crate::compiler_context::CompilerContext;
 use std::iter::Peekable;
 use std::str::Chars;
+
+use crate::compiler_context::CompilerContext;
 
 pub(crate) struct Scanner<'ctx> {
     ctx: &'ctx CompilerContext,

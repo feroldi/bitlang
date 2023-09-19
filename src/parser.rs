@@ -81,9 +81,7 @@ impl<'ctx> Parser<'ctx> {
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
                     );
 
-                    Some(Expr::BindRef(BindRef {
-                        identifier,
-                    }))
+                    Some(Expr::BindRef(BindRef { identifier }))
                 }
             }
             _ => None,
