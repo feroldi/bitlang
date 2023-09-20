@@ -14,7 +14,7 @@ fn test_bind_to_primary_expr_and_return_from_function() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    sub rsp, 4
@@ -49,7 +49,7 @@ fn test_allocate_stack_according_to_how_many_bindings_there_are_and_ref_then_bac
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    sub rsp, 16
@@ -99,7 +99,7 @@ fn test_allocate_stack_for_many_functions() {
     check(
         program,
         r#"
-        |.func1:
+        |func1:
         |    push rbp
         |    mov rbp, rsp
         |    sub rsp, 8
@@ -112,7 +112,7 @@ fn test_allocate_stack_for_many_functions() {
         |    pop rbp
         |    ret
         |
-        |.func2:
+        |func2:
         |    push rbp
         |    mov rbp, rsp
         |    sub rsp, 12
@@ -155,7 +155,7 @@ fn test_allocate_stack_for_inner_scopes() {
     check(
         program,
         r#"
-        |.func:
+        |func:
         |    push rbp
         |    mov rbp, rsp
         |    sub rsp, 16

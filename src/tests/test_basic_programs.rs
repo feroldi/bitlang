@@ -11,7 +11,7 @@ fn test_main_empty_function_returns_0() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    pop rbp
@@ -33,7 +33,7 @@ fn test_main_function_explicitly_returns_0() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 0
@@ -56,7 +56,7 @@ fn test_main_function_explicitly_returns_1() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 1
@@ -79,7 +79,7 @@ fn test_main_function_explicitly_returns_42() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 42

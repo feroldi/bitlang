@@ -223,7 +223,7 @@ impl<'ctx> CodeGen<'ctx> {
         let label_count = self.label_counter;
         self.label_counter += 1;
 
-        self.ctx.get_or_intern_str(&format!("L{}", label_count))
+        self.ctx.get_or_intern_str(&format!(".L{}", label_count))
     }
 
     fn enter_scope(&mut self) {
@@ -309,11 +309,11 @@ impl fmt::Display for CtxInst<'_> {
         }
 
         match self.inst {
-            Inst::Label { name } => write!(f, ".{}:", self.ctx.resolve_symbol(name)),
+            Inst::Label { name } => write!(f, "{}:", self.ctx.resolve_symbol(name)),
             Inst::Mov { target, source } => write!(f, "mov {}, {}", target, source),
             Inst::Cmp { reg, value } => write!(f, "cmp {}, {}", reg, value),
-            Inst::Je { label } => write!(f, "je .{}", self.ctx.resolve_symbol(label)),
-            Inst::Jmp { label } => write!(f, "jmp .{}", self.ctx.resolve_symbol(label)),
+            Inst::Je { label } => write!(f, "je {}", self.ctx.resolve_symbol(label)),
+            Inst::Jmp { label } => write!(f, "jmp {}", self.ctx.resolve_symbol(label)),
             Inst::Ret => write!(f, "ret"),
             Inst::Push { source } => write!(f, "push {}", source),
             Inst::Pop { target } => write!(f, "pop {}", target),

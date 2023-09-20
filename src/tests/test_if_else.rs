@@ -17,7 +17,7 @@ fn test_if_else_with_basic_expressions() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 1
@@ -53,7 +53,7 @@ fn test_if_else_inside_another() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 1
@@ -94,7 +94,7 @@ fn test_if_without_else() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 1
@@ -129,7 +129,7 @@ fn test_multi_exprs_inside_if_body() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 1
@@ -170,7 +170,7 @@ fn test_chained_if_else() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 10
@@ -221,7 +221,7 @@ fn test_chained_if_else_without_final_else() {
     check(
         program,
         r#"
-        |.main:
+        |main:
         |    push rbp
         |    mov rbp, rsp
         |    mov eax, 10
