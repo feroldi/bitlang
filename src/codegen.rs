@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program, CompoundExpr, FnCallExpr};
+use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program, CompoundExpr, FnCallExpr, ForExpr};
 use crate::compiler_context::CompilerContext;
 use crate::interner::Symbol;
 
@@ -95,6 +95,7 @@ impl<'ctx> CodeGen<'ctx> {
             Expr::Semi(expr) => self.gen_expr(expr),
             Expr::Const(constant) => self.gen_constant_expr(*constant),
             Expr::If(if_expr) => self.gen_if_expr(*if_expr),
+            Expr::For(for_expr) => self.gen_for_expr(*for_expr),
             Expr::BindDef(bind_def) => self.gen_bind_def_expr(*bind_def),
             Expr::BindRef(bind_ref) => self.gen_bind_ref_expr(*bind_ref),
             Expr::Compound(compound_expr) => self.gen_compound_expr(*compound_expr),
@@ -181,6 +182,32 @@ impl<'ctx> CodeGen<'ctx> {
         insts.extend(self.gen_compound_expr(branch));
 
         (insts, next_branch_label)
+    }
+
+    fn gen_for_expr(&mut self, for_expr: ForExpr) -> Vec<Inst> {
+        let start_label = self.make_label();
+        let mut insts = vec![Inst::Label { name: start_label }];
+        let mut footer_insts = vec![Inst::Jmp { label: start_label }];
+
+        if let Some(cond_expr) = for_expr.cond_expr {
+            insts.extend(self.gen_expr(cond_expr));
+            insts.push(Inst::Cmp {
+                reg: Reg::Eax,
+                value: 0,
+            });
+
+            let exit_label = self.make_label();
+            insts.push(Inst::Je {
+                label: exit_label,
+            });
+
+            footer_insts.push(Inst::Label { name: exit_label })
+        }
+
+        insts.extend(self.gen_compound_expr(for_expr.body));
+        insts.extend(footer_insts);
+
+        insts
     }
 
     fn gen_bind_def_expr(&mut self, bind_def: BindDef) -> Vec<Inst> {

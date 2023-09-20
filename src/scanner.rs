@@ -98,9 +98,10 @@ impl Scanner<'_> {
         let ident_text = &self.ctx.get_source_code()[ident_span_start.0..self.current_peek_pos.0];
 
         match ident_text {
+            "i32" => TokenKind::Keyword(Keyword::I32),
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
-            "i32" => TokenKind::Keyword(Keyword::I32),
+            "for" => TokenKind::Keyword(Keyword::For),
             _ => TokenKind::Identifier,
         }
     }
@@ -159,11 +160,12 @@ pub(crate) enum TokenKind {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum Keyword {
-    Break,
-    Continue,
+    I32,
     If,
     Else,
-    I32,
+    For,
+    Break,
+    Continue,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]

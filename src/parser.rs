@@ -62,6 +62,7 @@ impl<'ctx> Parser<'ctx> {
                 Some(expr)
             }
             TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
+            TokenKind::Keyword(Keyword::For) => self.parse_for_expr(),
             TokenKind::Open(Delim::Paren) => self.parse_function(),
             TokenKind::Open(Delim::Curly) => self.parse_compound_expr(tok).map(Expr::Compound),
             TokenKind::Identifier => {
@@ -87,9 +88,7 @@ impl<'ctx> Parser<'ctx> {
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
                     );
 
-                    Some(Expr::FnCall(FnCallExpr {
-                        identifier,
-                    }))
+                    Some(Expr::FnCall(FnCallExpr { identifier }))
                 } else {
                     let identifier = self.ctx.get_or_intern_str(
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
@@ -166,6 +165,24 @@ impl<'ctx> Parser<'ctx> {
         }))
     }
 
+    fn parse_for_expr(&mut self) -> Option<Expr<'ctx>> {
+        let cond_expr = if self.peek()?.kind != TokenKind::Open(Delim::Curly) {
+            self.parse_expr().map(|e| self.ctx.alloc_expr(e))
+        } else {
+            None
+        };
+
+        let open_curly_tok = self.consume()?;
+        debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
+
+        let for_loop_body = self.parse_compound_expr(open_curly_tok)?;
+
+        Some(Expr::For(ForExpr {
+            cond_expr,
+            body: for_loop_body,
+        }))
+    }
+
     fn parse_function(&mut self) -> Option<Expr<'ctx>> {
         let closed_paren = self.consume()?;
         debug_assert_eq!(closed_paren.kind, TokenKind::Closed(Delim::Paren));
@@ -209,7 +226,9 @@ impl<'ctx> Parser<'ctx> {
         let closed_curly_tok = self.consume()?;
         debug_assert_eq!(closed_curly_tok.kind, TokenKind::Closed(Delim::Curly));
 
-        Some(CompoundExpr { exprs: self.ctx.alloc_slice_of_expr(&exprs) })
+        Some(CompoundExpr {
+            exprs: self.ctx.alloc_slice_of_expr(&exprs),
+        })
     }
 
     fn peek(&self) -> Option<Token> {

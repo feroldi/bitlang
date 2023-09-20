@@ -18,6 +18,7 @@ pub(crate) enum Expr<'ctx> {
     BindDef(BindDef<'ctx>),
     Function(Function<'ctx>),
     If(IfExpr<'ctx>),
+    For(ForExpr<'ctx>),
     Compound(CompoundExpr<'ctx>),
     Semi(&'ctx Expr<'ctx>),
     FnCall(FnCallExpr),
@@ -70,6 +71,12 @@ pub(crate) struct IfExpr<'ctx> {
 pub(crate) struct ElseIfBranch<'ctx> {
     pub(crate) cond_expr: &'ctx Expr<'ctx>,
     pub(crate) true_branch: CompoundExpr<'ctx>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ForExpr<'ctx> {
+    pub(crate) cond_expr: Option<&'ctx Expr<'ctx>>,
+    pub(crate) body: CompoundExpr<'ctx>,
 }
 
 #[derive(Clone, Copy)]
