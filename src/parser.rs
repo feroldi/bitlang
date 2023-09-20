@@ -77,6 +77,19 @@ impl<'ctx> Parser<'ctx> {
                         identifier,
                         value: self.ctx.alloc_expr(value),
                     }))
+                } else if self.peek()?.kind == TokenKind::Open(Delim::Paren) {
+                    self.consume()?;
+
+                    let close_paren_tok = self.consume()?;
+                    debug_assert_eq!(close_paren_tok.kind, TokenKind::Closed(Delim::Paren));
+
+                    let identifier = self.ctx.get_or_intern_str(
+                        &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
+                    );
+
+                    Some(Expr::FnCall(FnCallExpr {
+                        identifier,
+                    }))
                 } else {
                     let identifier = self.ctx.get_or_intern_str(
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],

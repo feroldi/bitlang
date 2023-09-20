@@ -20,6 +20,7 @@ pub(crate) enum Expr<'ctx> {
     If(IfExpr<'ctx>),
     Compound(CompoundExpr<'ctx>),
     Semi(&'ctx Expr<'ctx>),
+    FnCall(FnCallExpr),
 }
 
 #[derive(Clone, Copy)]
@@ -76,4 +77,7 @@ pub(crate) struct CompoundExpr<'ctx> {
     pub(crate) exprs: &'ctx [Expr<'ctx>],
 }
 
-
+#[derive(Clone, Copy)]
+pub(crate) struct FnCallExpr {
+    pub(crate) identifier: Symbol,
+}

@@ -2,6 +2,7 @@ use crate::driver;
 
 mod test_basic_programs;
 mod test_binding;
+mod test_function_call;
 mod test_if_else;
 
 fn compile(source_code: &str) -> String {

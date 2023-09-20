@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program, CompoundExpr};
+use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program, CompoundExpr, FnCallExpr};
 use crate::compiler_context::CompilerContext;
 use crate::interner::Symbol;
 
@@ -98,6 +98,7 @@ impl<'ctx> CodeGen<'ctx> {
             Expr::BindDef(bind_def) => self.gen_bind_def_expr(*bind_def),
             Expr::BindRef(bind_ref) => self.gen_bind_ref_expr(*bind_ref),
             Expr::Compound(compound_expr) => self.gen_compound_expr(*compound_expr),
+            Expr::FnCall(fn_call_expr) => self.gen_fn_call_expr(*fn_call_expr),
             Expr::Function(_) => unimplemented!(),
         }
     }
@@ -219,6 +220,12 @@ impl<'ctx> CodeGen<'ctx> {
         insts
     }
 
+    fn gen_fn_call_expr(&mut self, fn_call_expr: FnCallExpr) -> Vec<Inst> {
+        vec![
+            Inst::Call { label: fn_call_expr.identifier },
+        ]
+    }
+
     fn make_label(&mut self) -> Symbol {
         let label_count = self.label_counter;
         self.label_counter += 1;
@@ -267,6 +274,7 @@ enum Inst {
     Pop { target: Reg },
     Sub { target: Arg, source: Arg },
     Add { target: Arg, source: Arg },
+    Call { label: Symbol },
 }
 
 #[derive(Clone, Copy)]
@@ -319,6 +327,7 @@ impl fmt::Display for CtxInst<'_> {
             Inst::Pop { target } => write!(f, "pop {}", target),
             Inst::Sub { target, source } => write!(f, "sub {}, {}", target, source),
             Inst::Add { target, source } => write!(f, "add {}, {}", target, source),
+            Inst::Call { label } => write!(f, "call {}", self.ctx.resolve_symbol(label)),
         }
     }
 }
