@@ -274,13 +274,22 @@ impl<'ctx> CodeGen<'ctx> {
 
     fn insert_in_scope(&mut self, bind_def: BindDef) -> usize {
         self.allocated_stack_bytes += 4;
-        self.scope_stack.last_mut().unwrap().insert(bind_def.identifier, self.allocated_stack_bytes);
+        self.scope_stack
+            .last_mut()
+            .unwrap()
+            .insert(bind_def.identifier, self.allocated_stack_bytes);
 
         self.allocated_stack_bytes
     }
 
     fn get_in_scope(&self, bind_ref: BindRef) -> usize {
-        *self.scope_stack.last().unwrap().get(&bind_ref.identifier).unwrap()
+        for scope in self.scope_stack.iter().rev() {
+            if let Some(bind_offset) = scope.get(&bind_ref.identifier) {
+                return *bind_offset;
+            }
+        }
+
+        unreachable!("binding does not exist")
     }
 }
 

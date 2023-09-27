@@ -184,3 +184,37 @@ fn test_allocate_stack_for_inner_scopes() {
         |"#,
     );
 }
+
+#[test]
+fn test_access_outer_scope_bindings() {
+    let program = compile(
+        r#"
+        |func :: () -> i32 {
+        |    foo := 1;
+        |
+        |    {
+        |        foo;
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |func:
+        |    push rbp
+        |    mov rbp, rsp
+        |    sub rsp, 4
+        |
+        |    mov eax, 1
+        |    mov DWORD PTR [rbp-4], eax
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |
+        |    add rsp, 4
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
