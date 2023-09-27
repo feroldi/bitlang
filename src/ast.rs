@@ -75,8 +75,20 @@ pub(crate) struct ElseIfBranch<'ctx> {
 
 #[derive(Clone, Copy)]
 pub(crate) struct ForExpr<'ctx> {
-    pub(crate) cond_expr: Option<&'ctx Expr<'ctx>>,
+    pub(crate) iteration: Option<ForIteration<'ctx>>,
     pub(crate) body: CompoundExpr<'ctx>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ForIteration<'ctx> {
+    Conditional {
+        cond_expr: &'ctx Expr<'ctx>,
+    },
+    Iterative {
+        identifier: Symbol,
+        start_expr: &'ctx Expr<'ctx>,
+        end_expr: &'ctx Expr<'ctx>,
+    }
 }
 
 #[derive(Clone, Copy)]

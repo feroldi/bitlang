@@ -166,8 +166,35 @@ impl<'ctx> Parser<'ctx> {
     }
 
     fn parse_for_expr(&mut self) -> Option<Expr<'ctx>> {
-        let cond_expr = if self.peek()?.kind != TokenKind::Open(Delim::Curly) {
-            self.parse_expr().map(|e| self.ctx.alloc_expr(e))
+        let iteration = if self.peek()?.kind == TokenKind::Identifier
+            && self.look_ahead(1)?.kind == TokenKind::Keyword(Keyword::In)
+        {
+            let ident_tok = self.consume()?;
+            let identifier = self.ctx.get_or_intern_str(
+                &self.ctx.get_source_code()[ident_tok.span.start.0..ident_tok.span.end.0],
+            );
+
+            let in_kw_tok = self.consume()?;
+            debug_assert_eq!(in_kw_tok.kind, TokenKind::Keyword(Keyword::In));
+
+            let start_expr = self.parse_expr()?;
+
+            let range_tok = self.consume()?;
+            debug_assert_eq!(range_tok.kind, TokenKind::PeriodPeriod);
+
+            let end_expr = self.parse_expr()?;
+
+            Some(ForIteration::Iterative {
+                identifier,
+                start_expr: self.ctx.alloc_expr(start_expr),
+                end_expr: self.ctx.alloc_expr(end_expr),
+            })
+        } else if self.peek()?.kind != TokenKind::Open(Delim::Curly) {
+            let cond_expr = self.parse_expr()?;
+
+            Some(ForIteration::Conditional {
+                cond_expr: self.ctx.alloc_expr(cond_expr),
+            })
         } else {
             None
         };
@@ -178,7 +205,7 @@ impl<'ctx> Parser<'ctx> {
         let for_loop_body = self.parse_compound_expr(open_curly_tok)?;
 
         Some(Expr::For(ForExpr {
-            cond_expr,
+            iteration,
             body: for_loop_body,
         }))
     }

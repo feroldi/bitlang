@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::ast::{BindDef, BindRef, Const, Decl, Expr, Function, IfExpr, Program, CompoundExpr, FnCallExpr, ForExpr};
+use crate::ast::{
+    BindDef, BindRef, CompoundExpr, Const, Decl, Expr, FnCallExpr, ForExpr, ForIteration, Function,
+    IfExpr, Program,
+};
 use crate::compiler_context::CompilerContext;
 use crate::interner::Symbol;
 
@@ -166,7 +169,11 @@ impl<'ctx> CodeGen<'ctx> {
         if_insts
     }
 
-    fn gen_cond_and_branch(&mut self, cond_expr: &Expr, branch: CompoundExpr) -> (Vec<Inst>, Symbol) {
+    fn gen_cond_and_branch(
+        &mut self,
+        cond_expr: &Expr,
+        branch: CompoundExpr,
+    ) -> (Vec<Inst>, Symbol) {
         let mut insts = self.gen_expr(cond_expr);
 
         insts.push(Inst::Cmp {
@@ -186,26 +193,82 @@ impl<'ctx> CodeGen<'ctx> {
 
     fn gen_for_expr(&mut self, for_expr: ForExpr) -> Vec<Inst> {
         let start_label = self.make_label();
-        let mut insts = vec![Inst::Label { name: start_label }];
+        let mut insts = vec![];
         let mut footer_insts = vec![Inst::Jmp { label: start_label }];
 
-        if let Some(cond_expr) = for_expr.cond_expr {
-            insts.extend(self.gen_expr(cond_expr));
-            insts.push(Inst::Cmp {
-                reg: Reg::Eax,
-                value: 0,
-            });
+        self.enter_scope();
 
-            let exit_label = self.make_label();
-            insts.push(Inst::Je {
-                label: exit_label,
-            });
+        match for_expr.iteration {
+            Some(ForIteration::Conditional { cond_expr }) => {
+                insts.push(Inst::Label { name: start_label });
 
-            footer_insts.push(Inst::Label { name: exit_label })
+                insts.extend(self.gen_expr(cond_expr));
+                insts.push(Inst::Cmp {
+                    reg: Reg::Eax,
+                    value: 0,
+                });
+
+                let exit_label = self.make_label();
+                insts.push(Inst::Je { label: exit_label });
+                insts.extend(self.gen_compound_expr(for_expr.body));
+
+                footer_insts.push(Inst::Label { name: exit_label })
+            }
+            Some(ForIteration::Iterative {
+                identifier,
+                start_expr,
+                end_expr,
+            }) => {
+                insts.extend(self.gen_bind_def_expr(BindDef {
+                    identifier,
+                    value: start_expr,
+                }));
+
+                insts.push(Inst::Label { name: start_label });
+
+                let bind_ref = BindRef { identifier };
+
+                insts.extend(self.gen_bind_ref_expr(bind_ref));
+                // FIXME: This is specialized because I can't allocate registers at will.
+                let value = match end_expr {
+                    Expr::Const(Const::IntegerConstant { value }) => *value,
+                    _ => unimplemented!(),
+                };
+
+                insts.push(Inst::Cmp {
+                    reg: Reg::Eax,
+                    value,
+                });
+                let exit_label = self.make_label();
+                insts.push(Inst::Je { label: exit_label });
+
+                insts.extend(self.gen_compound_expr(for_expr.body));
+
+                insts.extend(self.gen_bind_ref_expr(bind_ref));
+                insts.push(Inst::Add {
+                    target: Arg::Reg(Reg::Eax),
+                    source: Arg::Imm(1),
+                });
+                let bind_offset = self.get_in_scope(bind_ref);
+                insts.push(Inst::Mov {
+                    target: Arg::MemOffset {
+                        base: Reg::Rbp,
+                        offset: -(bind_offset as i32),
+                    },
+                    source: Arg::Reg(Reg::Eax),
+                });
+
+                footer_insts.push(Inst::Label { name: exit_label })
+            }
+            None => {
+                insts.push(Inst::Label { name: start_label });
+                insts.extend(self.gen_compound_expr(for_expr.body));
+            }
         }
 
-        insts.extend(self.gen_compound_expr(for_expr.body));
         insts.extend(footer_insts);
+
+        self.exit_scope();
 
         insts
     }
@@ -241,16 +304,20 @@ impl<'ctx> CodeGen<'ctx> {
 
     fn gen_compound_expr(&mut self, compound_expr: CompoundExpr) -> Vec<Inst> {
         self.enter_scope();
-        let insts = compound_expr.exprs.iter().flat_map(|e| self.gen_expr(e)).collect();
+        let insts = compound_expr
+            .exprs
+            .iter()
+            .flat_map(|e| self.gen_expr(e))
+            .collect();
         self.exit_scope();
 
         insts
     }
 
     fn gen_fn_call_expr(&mut self, fn_call_expr: FnCallExpr) -> Vec<Inst> {
-        vec![
-            Inst::Call { label: fn_call_expr.identifier },
-        ]
+        vec![Inst::Call {
+            label: fn_call_expr.identifier,
+        }]
     }
 
     fn make_label(&mut self) -> Symbol {

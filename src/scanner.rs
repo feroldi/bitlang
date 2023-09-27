@@ -60,6 +60,11 @@ impl Scanner<'_> {
 
                 TokenKind::DashGreater
             }
+            '.' if self.peek() == '.' => {
+                self.bump();
+
+                TokenKind::PeriodPeriod
+            }
             '0'..='9' => self.scan_integer_constant(),
             'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier(span_start),
             ch => todo!("char not recognized: '{}'", ch),
@@ -102,6 +107,7 @@ impl Scanner<'_> {
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
             "for" => TokenKind::Keyword(Keyword::For),
+            "in" => TokenKind::Keyword(Keyword::In),
             _ => TokenKind::Identifier,
         }
     }
@@ -153,6 +159,7 @@ pub(crate) enum TokenKind {
     ColonEqual,
     Semi,
     DashGreater,
+    PeriodPeriod,
     Keyword(Keyword),
     Open(Delim),
     Closed(Delim),
@@ -164,6 +171,7 @@ pub(crate) enum Keyword {
     If,
     Else,
     For,
+    In,
     Break,
     Continue,
 }

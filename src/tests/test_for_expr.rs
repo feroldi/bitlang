@@ -109,3 +109,46 @@ fn test_conditional_for_loop() {
         |"#,
     );
 }
+
+#[test]
+fn test_iteration_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for i in 0..10 {
+        |        i;
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |    sub rsp, 4
+        |
+        |    mov eax, 0
+        |    mov DWORD PTR [rbp-4], eax
+        |
+        |.L0:
+        |    mov eax, DWORD PTR [rbp-4]
+        |    cmp eax, 10
+        |    je .L1
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |    add eax, 1
+        |    mov DWORD PTR [rbp-4], eax
+        |    jmp .L0
+        |
+        |.L1:
+        |    add rsp, 4
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
