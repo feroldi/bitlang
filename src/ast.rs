@@ -88,7 +88,14 @@ pub(crate) enum ForIteration<'ctx> {
         identifier: Symbol,
         start_expr: &'ctx Expr<'ctx>,
         end_expr: &'ctx Expr<'ctx>,
-    }
+        range_kind: RangeKind,
+    },
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum RangeKind {
+    Inclusive,
+    Exclusive,
 }
 
 #[derive(Clone, Copy)]

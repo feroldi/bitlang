@@ -63,7 +63,13 @@ impl Scanner<'_> {
             '.' if self.peek() == '.' => {
                 self.bump();
 
-                TokenKind::PeriodPeriod
+                if self.peek() == '=' {
+                    self.bump();
+
+                    TokenKind::PeriodPeriodEqual
+                } else {
+                    TokenKind::PeriodPeriod
+                }
             }
             '0'..='9' => self.scan_integer_constant(),
             'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier(span_start),
@@ -159,6 +165,7 @@ pub(crate) enum TokenKind {
     Semi,
     DashGreater,
     PeriodPeriod,
+    PeriodPeriodEqual,
     Keyword(Keyword),
     Open(Delim),
     Closed(Delim),

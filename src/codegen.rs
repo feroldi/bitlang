@@ -3,7 +3,7 @@ use std::fmt;
 
 use crate::ast::{
     BindDef, BindRef, CompoundExpr, Const, Decl, Expr, FnCallExpr, ForExpr, ForIteration, Function,
-    IfExpr, Program,
+    IfExpr, Program, RangeKind,
 };
 use crate::compiler_context::CompilerContext;
 use crate::interner::Symbol;
@@ -218,6 +218,7 @@ impl<'ctx> CodeGen<'ctx> {
                 identifier,
                 start_expr,
                 end_expr,
+                range_kind,
             }) => {
                 insts.extend(self.gen_bind_def_expr(BindDef {
                     identifier,
@@ -240,7 +241,10 @@ impl<'ctx> CodeGen<'ctx> {
                     value,
                 });
                 let exit_label = self.make_label();
-                insts.push(Inst::Je { label: exit_label });
+                match range_kind {
+                    RangeKind::Inclusive => insts.push(Inst::Jg { label: exit_label }),
+                    RangeKind::Exclusive => insts.push(Inst::Jge { label: exit_label }),
+                }
 
                 insts.extend(self.gen_compound_expr(for_expr.body));
 
@@ -371,6 +375,8 @@ enum Inst {
     Mov { target: Arg, source: Arg },
     Cmp { reg: Reg, value: i32 },
     Je { label: Symbol },
+    Jg { label: Symbol },
+    Jge { label: Symbol },
     Jmp { label: Symbol },
     Ret,
     Push { source: Reg },
@@ -424,6 +430,8 @@ impl fmt::Display for CtxInst<'_> {
             Inst::Mov { target, source } => write!(f, "mov {}, {}", target, source),
             Inst::Cmp { reg, value } => write!(f, "cmp {}, {}", reg, value),
             Inst::Je { label } => write!(f, "je {}", self.ctx.resolve_symbol(label)),
+            Inst::Jg { label } => write!(f, "jg {}", self.ctx.resolve_symbol(label)),
+            Inst::Jge { label } => write!(f, "jge {}", self.ctx.resolve_symbol(label)),
             Inst::Jmp { label } => write!(f, "jmp {}", self.ctx.resolve_symbol(label)),
             Inst::Ret => write!(f, "ret"),
             Inst::Push { source } => write!(f, "push {}", source),

@@ -180,7 +180,13 @@ impl<'ctx> Parser<'ctx> {
             let start_expr = self.parse_expr()?;
 
             let range_tok = self.consume()?;
-            debug_assert_eq!(range_tok.kind, TokenKind::PeriodPeriod);
+            let range_kind = if range_tok.kind == TokenKind::PeriodPeriodEqual {
+                RangeKind::Inclusive
+            } else {
+                debug_assert_eq!(range_tok.kind, TokenKind::PeriodPeriod);
+
+                RangeKind::Exclusive
+            };
 
             let end_expr = self.parse_expr()?;
 
@@ -188,6 +194,7 @@ impl<'ctx> Parser<'ctx> {
                 identifier,
                 start_expr: self.ctx.alloc_expr(start_expr),
                 end_expr: self.ctx.alloc_expr(end_expr),
+                range_kind,
             })
         } else if self.peek()?.kind != TokenKind::Open(Delim::Curly) {
             let cond_expr = self.parse_expr()?;
