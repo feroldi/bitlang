@@ -107,7 +107,6 @@ impl Scanner<'_> {
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
             "for" => TokenKind::Keyword(Keyword::For),
-            "in" => TokenKind::Keyword(Keyword::In),
             _ => TokenKind::Identifier,
         }
     }
@@ -171,7 +170,6 @@ pub(crate) enum Keyword {
     If,
     Else,
     For,
-    In,
     Break,
     Continue,
 }

@@ -115,7 +115,7 @@ fn test_iteration_for_loop() {
     let program = compile(
         r#"
         |main :: () {
-        |    for i in 0..10 {
+        |    for i : 3..10 {
         |        i;
         |    }
         |}
@@ -130,7 +130,7 @@ fn test_iteration_for_loop() {
         |    mov rbp, rsp
         |    sub rsp, 4
         |
-        |    mov eax, 0
+        |    mov eax, 3
         |    mov DWORD PTR [rbp-4], eax
         |
         |.L0:

@@ -167,7 +167,7 @@ impl<'ctx> Parser<'ctx> {
 
     fn parse_for_expr(&mut self) -> Option<Expr<'ctx>> {
         let iteration = if self.peek()?.kind == TokenKind::Identifier
-            && self.look_ahead(1)?.kind == TokenKind::Keyword(Keyword::In)
+            && self.look_ahead(1)?.kind == TokenKind::Colon
         {
             let ident_tok = self.consume()?;
             let identifier = self.ctx.get_or_intern_str(
@@ -175,7 +175,7 @@ impl<'ctx> Parser<'ctx> {
             );
 
             let in_kw_tok = self.consume()?;
-            debug_assert_eq!(in_kw_tok.kind, TokenKind::Keyword(Keyword::In));
+            debug_assert_eq!(in_kw_tok.kind, TokenKind::Colon);
 
             let start_expr = self.parse_expr()?;
 
