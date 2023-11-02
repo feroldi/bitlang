@@ -68,6 +68,35 @@ fn test_infinite_for_loop() {
 }
 
 #[test]
+fn test_conditional_empty_infinite_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for 1 {
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:
+        |    mov eax, 1
+        |    cmp eax, 0
+        |    je .L1
+        |    jmp .L0
+        |.L1:
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+#[test]
 fn test_conditional_for_loop() {
     let program = compile(
         r#"
