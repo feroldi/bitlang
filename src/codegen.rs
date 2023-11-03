@@ -371,13 +371,12 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     fn get_in_scope(&self, bind_ref: BindRef) -> usize {
-        for scope in self.scope_stack.iter().rev() {
-            if let Some(bind_offset) = scope.memory_offset_by_symbol.get(&bind_ref.identifier) {
-                return *bind_offset;
-            }
-        }
-
-        unreachable!("binding does not exist")
+        self.find_in_scope(|scope| {
+            scope
+                .memory_offset_by_symbol
+                .get(&bind_ref.identifier)
+                .cloned()
+        })
     }
 
     fn find_in_scope<R: Clone, F: Fn(&Scope) -> Option<R>>(&self, f: F) -> R {
