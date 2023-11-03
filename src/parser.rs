@@ -63,6 +63,7 @@ impl<'ctx> Parser<'ctx> {
             }
             TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
             TokenKind::Keyword(Keyword::For) => self.parse_for_expr(),
+            TokenKind::Keyword(Keyword::Break) => self.parse_break_expr(),
             TokenKind::Open(Delim::Paren) => self.parse_function(),
             TokenKind::Open(Delim::Curly) => self.parse_compound_expr(tok).map(Expr::Compound),
             TokenKind::Identifier => {
@@ -215,6 +216,10 @@ impl<'ctx> Parser<'ctx> {
             iteration,
             body: for_loop_body,
         }))
+    }
+
+    fn parse_break_expr(&mut self) -> Option<Expr<'ctx>> {
+        Some(Expr::Break)
     }
 
     fn parse_function(&mut self) -> Option<Expr<'ctx>> {

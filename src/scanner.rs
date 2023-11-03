@@ -113,6 +113,7 @@ impl Scanner<'_> {
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
             "for" => TokenKind::Keyword(Keyword::For),
+            "break" => TokenKind::Keyword(Keyword::Break),
             _ => TokenKind::Identifier,
         }
     }

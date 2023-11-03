@@ -19,6 +19,7 @@ pub(crate) enum Expr<'ctx> {
     Function(Function<'ctx>),
     If(IfExpr<'ctx>),
     For(ForExpr<'ctx>),
+    Break,
     Compound(CompoundExpr<'ctx>),
     Semi(&'ctx Expr<'ctx>),
     FnCall(FnCallExpr),

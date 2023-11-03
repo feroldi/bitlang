@@ -19,6 +19,7 @@ fn test_empty_infinite_for_loop() {
         |    mov rbp, rsp
         |.L0:
         |    jmp .L0
+        |.L1:
         |    pop rbp
         |    ret
         |"#,
@@ -54,6 +55,7 @@ fn test_infinite_for_loop() {
         |    call foo
         |    jmp .L0
         |
+        |.L1:
         |    add rsp, 4
         |    pop rbp
         |    ret
@@ -219,6 +221,35 @@ fn test_iteration_for_loop_inclusive_range() {
         |
         |.L1:
         |    add rsp, 4
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+
+#[test]
+fn test_break_infinite_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for {
+        |        break
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:
+        |    jmp .L1
+        |    jmp .L0
+        |.L1:
         |    pop rbp
         |    ret
         |"#,

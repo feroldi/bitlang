@@ -12,7 +12,13 @@ pub(crate) struct CodeGen<'ctx> {
     ctx: &'ctx CompilerContext,
     label_counter: u64,
     allocated_stack_bytes: usize,
-    scope_stack: Vec<HashMap<Symbol, usize>>,
+    scope_stack: Vec<Scope>,
+}
+
+#[derive(Default)]
+pub(crate) struct Scope {
+    memory_offset_by_symbol: HashMap<Symbol, usize>,
+    innermost_exit_label: Option<Symbol>,
 }
 
 impl<'ctx> CodeGen<'ctx> {
@@ -99,6 +105,7 @@ impl<'ctx> CodeGen<'ctx> {
             Expr::Const(constant) => self.gen_constant_expr(*constant),
             Expr::If(if_expr) => self.gen_if_expr(*if_expr),
             Expr::For(for_expr) => self.gen_for_expr(*for_expr),
+            Expr::Break => self.gen_break_expr(),
             Expr::BindDef(bind_def) => self.gen_bind_def_expr(*bind_def),
             Expr::BindRef(bind_ref) => self.gen_bind_ref_expr(*bind_ref),
             Expr::Compound(compound_expr) => self.gen_compound_expr(*compound_expr),
@@ -193,8 +200,11 @@ impl<'ctx> CodeGen<'ctx> {
 
     fn gen_for_expr(&mut self, for_expr: ForExpr) -> Vec<Inst> {
         let start_label = self.make_label();
+        let exit_label = self.make_label();
+
+        self.set_innermost_exit_label(exit_label);
+
         let mut insts = vec![];
-        let mut footer_insts = vec![Inst::Jmp { label: start_label }];
 
         self.enter_scope();
 
@@ -208,11 +218,8 @@ impl<'ctx> CodeGen<'ctx> {
                     value: 0,
                 });
 
-                let exit_label = self.make_label();
                 insts.push(Inst::Je { label: exit_label });
                 insts.extend(self.gen_compound_expr(for_expr.body));
-
-                footer_insts.push(Inst::Label { name: exit_label })
             }
             Some(ForIteration::Iterative {
                 identifier,
@@ -240,7 +247,6 @@ impl<'ctx> CodeGen<'ctx> {
                     reg: Reg::Eax,
                     value,
                 });
-                let exit_label = self.make_label();
                 match range_kind {
                     RangeKind::Inclusive => insts.push(Inst::Jg { label: exit_label }),
                     RangeKind::Exclusive => insts.push(Inst::Jge { label: exit_label }),
@@ -261,8 +267,6 @@ impl<'ctx> CodeGen<'ctx> {
                     },
                     source: Arg::Reg(Reg::Eax),
                 });
-
-                footer_insts.push(Inst::Label { name: exit_label })
             }
             None => {
                 insts.push(Inst::Label { name: start_label });
@@ -270,11 +274,18 @@ impl<'ctx> CodeGen<'ctx> {
             }
         }
 
-        insts.extend(footer_insts);
+        insts.push(Inst::Jmp { label: start_label });
+        insts.push(Inst::Label { name: exit_label });
 
         self.exit_scope();
 
         insts
+    }
+
+    fn gen_break_expr(&mut self) -> Vec<Inst> {
+        let exit_label = self.get_innermost_exit_label();
+
+        vec![Inst::Jmp { label: exit_label }]
     }
 
     fn gen_bind_def_expr(&mut self, bind_def: BindDef) -> Vec<Inst> {
@@ -332,7 +343,7 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     fn enter_scope(&mut self) {
-        self.scope_stack.push(HashMap::default());
+        self.scope_stack.push(Scope::default());
     }
 
     fn exit_scope(&mut self) {
@@ -343,24 +354,48 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 
+    fn get_this_scope_mut(&mut self) -> &mut Scope {
+        self.scope_stack.last_mut().unwrap()
+    }
+
     fn insert_in_scope(&mut self, bind_def: BindDef) -> usize {
-        self.allocated_stack_bytes += 4;
-        self.scope_stack
-            .last_mut()
-            .unwrap()
-            .insert(bind_def.identifier, self.allocated_stack_bytes);
+        let bumped_allocated_stack_bytes = self.allocated_stack_bytes + 4;
+
+        self.get_this_scope_mut()
+            .memory_offset_by_symbol
+            .insert(bind_def.identifier, bumped_allocated_stack_bytes);
+
+        self.allocated_stack_bytes = bumped_allocated_stack_bytes;
 
         self.allocated_stack_bytes
     }
 
     fn get_in_scope(&self, bind_ref: BindRef) -> usize {
         for scope in self.scope_stack.iter().rev() {
-            if let Some(bind_offset) = scope.get(&bind_ref.identifier) {
+            if let Some(bind_offset) = scope.memory_offset_by_symbol.get(&bind_ref.identifier) {
                 return *bind_offset;
             }
         }
 
         unreachable!("binding does not exist")
+    }
+
+    fn find_in_scope<R: Clone, F: Fn(&Scope) -> Option<R>>(&self, f: F) -> R {
+        for scope in self.scope_stack.iter().rev() {
+            if let Some(r) = f(scope) {
+                return r;
+            }
+        }
+
+        unreachable!("scope does not exist")
+    }
+
+    fn get_innermost_exit_label(&self) -> Symbol {
+        self.find_in_scope(|scope| scope.innermost_exit_label)
+    }
+
+    fn set_innermost_exit_label(&mut self, exit_label: Symbol) {
+        self.get_this_scope_mut().innermost_exit_label = Some(exit_label)
     }
 }
 
