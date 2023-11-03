@@ -199,14 +199,14 @@ impl<'ctx> CodeGen<'ctx> {
     }
 
     fn gen_for_expr(&mut self, for_expr: ForExpr) -> Vec<Inst> {
+        let mut insts = vec![];
+
+        self.enter_scope();
+
         let start_label = self.make_label();
         let exit_label = self.make_label();
 
         self.set_innermost_exit_label(exit_label);
-
-        let mut insts = vec![];
-
-        self.enter_scope();
 
         match for_expr.iteration {
             Some(ForIteration::Conditional { cond_expr }) => {

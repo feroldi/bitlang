@@ -255,3 +255,41 @@ fn test_break_infinite_for_loop() {
         |"#,
     );
 }
+
+#[test]
+fn test_break_innermost_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for {
+        |        for {
+        |            break
+        |        }
+        |        break
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:               ; start of outermost for-loop
+        |
+        |.L2:               ; start of innermost for-loop
+        |    jmp .L3        ; break out of innermost for-loop
+        |    jmp .L2
+        |.L3:               ; exit of innermost for-loop
+        |
+        |    jmp .L1        ; break out of outermost for-loop
+        |    jmp .L0
+        |
+        |.L1:               ; exit of outermost for-loop
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
