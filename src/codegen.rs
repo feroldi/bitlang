@@ -18,6 +18,7 @@ pub(crate) struct CodeGen<'ctx> {
 #[derive(Default)]
 pub(crate) struct Scope {
     memory_offset_by_symbol: HashMap<Symbol, usize>,
+    innermost_start_label: Option<Symbol>,
     innermost_exit_label: Option<Symbol>,
 }
 
@@ -106,6 +107,7 @@ impl<'ctx> CodeGen<'ctx> {
             Expr::If(if_expr) => self.gen_if_expr(*if_expr),
             Expr::For(for_expr) => self.gen_for_expr(*for_expr),
             Expr::Break => self.gen_break_expr(),
+            Expr::Continue => self.gen_continue_expr(),
             Expr::BindDef(bind_def) => self.gen_bind_def_expr(*bind_def),
             Expr::BindRef(bind_ref) => self.gen_bind_ref_expr(*bind_ref),
             Expr::Compound(compound_expr) => self.gen_compound_expr(*compound_expr),
@@ -206,6 +208,7 @@ impl<'ctx> CodeGen<'ctx> {
         let start_label = self.make_label();
         let exit_label = self.make_label();
 
+        self.set_innermost_start_label(start_label);
         self.set_innermost_exit_label(exit_label);
 
         match for_expr.iteration {
@@ -286,6 +289,12 @@ impl<'ctx> CodeGen<'ctx> {
         let exit_label = self.get_innermost_exit_label();
 
         vec![Inst::Jmp { label: exit_label }]
+    }
+
+    fn gen_continue_expr(&mut self) -> Vec<Inst> {
+        let start_label = self.get_innermost_start_label();
+
+        vec![Inst::Jmp { label: start_label }]
     }
 
     fn gen_bind_def_expr(&mut self, bind_def: BindDef) -> Vec<Inst> {
@@ -387,6 +396,14 @@ impl<'ctx> CodeGen<'ctx> {
         }
 
         unreachable!("scope does not exist")
+    }
+
+    fn get_innermost_start_label(&self) -> Symbol {
+        self.find_in_scope(|scope| scope.innermost_start_label)
+    }
+
+    fn set_innermost_start_label(&mut self, start_label: Symbol) {
+        self.get_this_scope_mut().innermost_start_label = Some(start_label)
     }
 
     fn get_innermost_exit_label(&self) -> Symbol {

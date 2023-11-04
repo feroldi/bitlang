@@ -367,3 +367,31 @@ fn test_breaks_iterative_for_loop() {
         |"#,
     );
 }
+
+#[test]
+fn test_continue_infinite_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for {
+        |        continue
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:
+        |    jmp .L0
+        |    jmp .L0
+        |.L1:
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}

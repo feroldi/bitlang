@@ -20,6 +20,7 @@ pub(crate) enum Expr<'ctx> {
     If(IfExpr<'ctx>),
     For(ForExpr<'ctx>),
     Break,
+    Continue,
     Compound(CompoundExpr<'ctx>),
     Semi(&'ctx Expr<'ctx>),
     FnCall(FnCallExpr),
