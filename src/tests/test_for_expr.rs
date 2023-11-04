@@ -293,3 +293,77 @@ fn test_break_innermost_for_loop() {
         |"#,
     );
 }
+
+#[test]
+fn test_many_breaks_in_infinite_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for {
+        |        break;
+        |        break;
+        |        break;
+        |        break;
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:
+        |    jmp .L1
+        |    jmp .L1
+        |    jmp .L1
+        |    jmp .L1
+        |    jmp .L0
+        |.L1:
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+#[test]
+fn test_breaks_iterative_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for i : 0..10 {
+        |        break
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |    sub rsp, 4
+        |    mov eax, 0
+        |    mov DWORD PTR [rbp-4], eax
+        |.L0:
+        |    mov eax, DWORD PTR [rbp-4]
+        |    cmp eax, 10
+        |    jge .L1
+        |
+        |    jmp .L1  ; break
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |    add eax, 1
+        |    mov DWORD PTR [rbp-4], eax
+        |    jmp .L0
+        |.L1:
+        |    add rsp, 4
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
