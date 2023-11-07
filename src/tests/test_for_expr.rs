@@ -227,7 +227,6 @@ fn test_iteration_for_loop_inclusive_range() {
     );
 }
 
-
 #[test]
 fn test_break_infinite_for_loop() {
     let program = compile(
@@ -390,6 +389,179 @@ fn test_continue_infinite_for_loop() {
         |    jmp .L0
         |    jmp .L0
         |.L1:
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+#[test]
+fn test_continue_innermost_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for {
+        |        for {
+        |            continue
+        |        }
+        |        continue
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:               ; start of outermost for-loop
+        |
+        |.L2:               ; start of innermost for-loop
+        |    jmp .L2        ; continue innermost for-loop
+        |    jmp .L2
+        |.L3:               ; exit of innermost for-loop
+        |
+        |    jmp .L0        ; continue outermost for-loop
+        |    jmp .L0
+        |
+        |.L1:               ; exit of outermost for-loop
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+#[test]
+fn test_many_continues_in_infinite_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for {
+        |        continue;
+        |        continue;
+        |        continue;
+        |        continue;
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |.L0:
+        |    jmp .L0
+        |    jmp .L0
+        |    jmp .L0
+        |    jmp .L0
+        |
+        |    jmp .L0 ; for-loop's jump
+        |.L1:
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+#[test]
+fn test_continue_iterative_for_loop() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for i : 0..10 {
+        |        continue
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |    sub rsp, 4
+        |    mov eax, 0
+        |    mov DWORD PTR [rbp-4], eax
+        |.L0:
+        |    mov eax, DWORD PTR [rbp-4]
+        |    cmp eax, 10
+        |    jge .L1
+        |
+        |    jmp .L0  ; continue
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |    add eax, 1
+        |    mov DWORD PTR [rbp-4], eax
+        |    jmp .L0
+        |.L1:
+        |    add rsp, 4
+        |    pop rbp
+        |    ret
+        |"#,
+    );
+}
+
+#[test]
+fn test_break_and_continue_under_conditionals() {
+    let program = compile(
+        r#"
+        |main :: () {
+        |    for i : 0..10 {
+        |        if i {
+        |            break
+        |        } else {
+        |            continue
+        |        }
+        |    }
+        |}
+        |"#,
+    );
+
+    check(
+        program,
+        r#"
+        |main:
+        |    push rbp
+        |    mov rbp, rsp
+        |    sub rsp, 4
+        |
+        |    ; initialize i
+        |    mov eax, 0
+        |    mov DWORD PTR [rbp-4], eax
+        |
+        |.L0:
+        |    ; loop's condition check
+        |    mov eax, DWORD PTR [rbp-4]
+        |    cmp eax, 10
+        |    jge .L1
+        |
+        |    mov eax, DWORD PTR [rbp-4]
+        |    cmp eax, 0
+        |    je .L2     ; if zero, then go to false-branch
+        |
+        |    jmp .L1    ; true-branch, do a break
+        |
+        |    jmp .L3    ; exit of true-branch, this is obviously unreachable
+        |
+        |.L2:
+        |    jmp .L0    ; false-branch, do a continue
+        |
+        |.L3:
+        |    ; loop's iteration
+        |    mov eax, DWORD PTR [rbp-4]
+        |    add eax, 1
+        |    mov DWORD PTR [rbp-4], eax
+        |    jmp .L0
+        |
+        |.L1:
+        |    add rsp, 4
         |    pop rbp
         |    ret
         |"#,
