@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::compiler_context::CompilerContext;
+use crate::error::{CompileError, Diagnostic};
 use crate::scanner::{Delim, Keyword, Token, TokenKind};
 
 pub(crate) struct Parser<'ctx> {
@@ -17,21 +18,30 @@ impl<'ctx> Parser<'ctx> {
         }
     }
 
-    pub(crate) fn parse_program(&mut self) -> Option<Program> {
+    pub(crate) fn parse_program(&mut self) -> Result<Program, Diagnostic> {
         let mut decls = vec![];
+        let mut compile_errors = vec![];
 
-        while let Some(decl) = self.parse_decl() {
-            decls.push(decl);
+        while !self.has_reached_eof() {
+            match self.parse_decl() {
+                Ok(decl) => decls.push(decl),
+                Err(compile_error) => compile_errors.push(compile_error),
+            }
         }
 
-        Some(Program {
-            decls: self.ctx.alloc_slice_of_decl(&decls),
-        })
+        if compile_errors.is_empty() {
+            Ok(Program {
+                decls: self.ctx.alloc_slice_of_decl(&decls),
+            })
+        } else {
+            Err(Diagnostic { compile_errors })
+        }
     }
 
-    fn parse_decl(&mut self) -> Option<Decl<'ctx>> {
-        let ident_tok = self.consume()?;
-        debug_assert_eq!(ident_tok.kind, TokenKind::Identifier);
+    fn parse_decl(&mut self) -> Result<Decl<'ctx>, CompileError> {
+        let ident_tok = self.expect_and_consume_or_else(TokenKind::Identifier, |_| {
+            CompileError::ExpectedDeclaration
+        })?;
 
         let op = self.consume()?;
         debug_assert_eq!(op.kind, TokenKind::ColonColon);
@@ -42,13 +52,13 @@ impl<'ctx> Parser<'ctx> {
             &self.ctx.get_source_code()[ident_tok.span.start.0..ident_tok.span.end.0],
         );
 
-        Some(Decl {
+        Ok(Decl {
             identifier,
             value: self.ctx.alloc_expr(expr),
         })
     }
 
-    fn parse_statement_expr(&mut self) -> Option<Expr<'ctx>> {
+    fn parse_statement_expr(&mut self) -> Result<Expr<'ctx>, CompileError> {
         let tok = self.consume()?;
 
         match tok.kind {
@@ -59,7 +69,7 @@ impl<'ctx> Parser<'ctx> {
                         .unwrap(),
                 });
 
-                Some(expr)
+                Ok(expr)
             }
             TokenKind::Keyword(Keyword::If) => self.parse_if_expr(),
             TokenKind::Keyword(Keyword::For) => self.parse_for_expr(),
@@ -76,7 +86,7 @@ impl<'ctx> Parser<'ctx> {
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
                     );
 
-                    Some(Expr::BindDef(BindDef {
+                    Ok(Expr::BindDef(BindDef {
                         identifier,
                         value: self.ctx.alloc_expr(value),
                     }))
@@ -90,32 +100,32 @@ impl<'ctx> Parser<'ctx> {
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
                     );
 
-                    Some(Expr::FnCall(FnCallExpr { identifier }))
+                    Ok(Expr::FnCall(FnCallExpr { identifier }))
                 } else {
                     let identifier = self.ctx.get_or_intern_str(
                         &self.ctx.get_source_code()[tok.span.start.0..tok.span.end.0],
                     );
 
-                    Some(Expr::BindRef(BindRef { identifier }))
+                    Ok(Expr::BindRef(BindRef { identifier }))
                 }
             }
-            _ => None,
+            _ => Err(CompileError::ExpectedDeclaration),
         }
     }
 
-    fn parse_expr(&mut self) -> Option<Expr<'ctx>> {
+    fn parse_expr(&mut self) -> Result<Expr<'ctx>, CompileError> {
         let stmt_expr = self.parse_statement_expr()?;
 
         if self.peek()?.kind == TokenKind::Semi {
             self.consume()?;
 
-            Some(Expr::Semi(self.ctx.alloc_expr(stmt_expr)))
+            Ok(Expr::Semi(self.ctx.alloc_expr(stmt_expr)))
         } else {
-            Some(stmt_expr)
+            Ok(stmt_expr)
         }
     }
 
-    fn parse_if_expr(&mut self) -> Option<Expr<'ctx>> {
+    fn parse_if_expr(&mut self) -> Result<Expr<'ctx>, CompileError> {
         let cond_expr = self.parse_expr()?;
 
         let open_curly_tok = self.consume()?;
@@ -159,7 +169,7 @@ impl<'ctx> Parser<'ctx> {
             None
         };
 
-        Some(Expr::If(IfExpr {
+        Ok(Expr::If(IfExpr {
             cond_expr: self.ctx.alloc_expr(cond_expr),
             true_branch,
             else_if_branches: self.ctx.alloc_slice_of_else_if_branch(&else_if_branches),
@@ -167,7 +177,7 @@ impl<'ctx> Parser<'ctx> {
         }))
     }
 
-    fn parse_for_expr(&mut self) -> Option<Expr<'ctx>> {
+    fn parse_for_expr(&mut self) -> Result<Expr<'ctx>, CompileError> {
         let iteration = if self.peek()?.kind == TokenKind::Identifier
             && self.look_ahead(1)?.kind == TokenKind::Colon
         {
@@ -213,21 +223,21 @@ impl<'ctx> Parser<'ctx> {
 
         let for_loop_body = self.parse_compound_expr(open_curly_tok)?;
 
-        Some(Expr::For(ForExpr {
+        Ok(Expr::For(ForExpr {
             iteration,
             body: for_loop_body,
         }))
     }
 
-    fn parse_break_expr(&mut self) -> Option<Expr<'ctx>> {
-        Some(Expr::Break)
+    fn parse_break_expr(&mut self) -> Result<Expr<'ctx>, CompileError> {
+        Ok(Expr::Break)
     }
 
-    fn parse_continue_expr(&mut self) -> Option<Expr<'ctx>> {
-        Some(Expr::Continue)
+    fn parse_continue_expr(&mut self) -> Result<Expr<'ctx>, CompileError> {
+        Ok(Expr::Continue)
     }
 
-    fn parse_function(&mut self) -> Option<Expr<'ctx>> {
+    fn parse_function(&mut self) -> Result<Expr<'ctx>, CompileError> {
         let closed_paren = self.consume()?;
         debug_assert_eq!(closed_paren.kind, TokenKind::Closed(Delim::Paren));
 
@@ -250,14 +260,17 @@ impl<'ctx> Parser<'ctx> {
 
         let compound_expr = self.parse_compound_expr(open_curly_tok)?;
 
-        Some(Expr::Function(Function {
+        Ok(Expr::Function(Function {
             return_type,
             parameters: self.ctx.alloc_slice_of_param(&[]),
             body: compound_expr,
         }))
     }
 
-    fn parse_compound_expr(&mut self, open_curly_tok: Token) -> Option<CompoundExpr<'ctx>> {
+    fn parse_compound_expr(
+        &mut self,
+        open_curly_tok: Token,
+    ) -> Result<CompoundExpr<'ctx>, CompileError> {
         debug_assert_eq!(open_curly_tok.kind, TokenKind::Open(Delim::Curly));
 
         let mut exprs = vec![];
@@ -270,30 +283,30 @@ impl<'ctx> Parser<'ctx> {
         let closed_curly_tok = self.consume()?;
         debug_assert_eq!(closed_curly_tok.kind, TokenKind::Closed(Delim::Curly));
 
-        Some(CompoundExpr {
+        Ok(CompoundExpr {
             exprs: self.ctx.alloc_slice_of_expr(&exprs),
         })
     }
 
-    fn peek(&self) -> Option<Token> {
+    fn peek(&self) -> Result<Token, CompileError> {
         if self.current_token_idx < self.tokens.len() {
-            Some(self.tokens[self.current_token_idx])
+            Ok(self.tokens[self.current_token_idx])
         } else {
-            None
+            Err(CompileError::UnexpectedEndOfInput)
         }
     }
 
-    fn look_ahead(&self, amount: usize) -> Option<Token> {
+    fn look_ahead(&self, amount: usize) -> Result<Token, CompileError> {
         let look_ahead_idx = self.current_token_idx + amount;
 
         if look_ahead_idx < self.tokens.len() {
-            Some(self.tokens[look_ahead_idx])
+            Ok(self.tokens[look_ahead_idx])
         } else {
-            None
+            Err(CompileError::UnexpectedEndOfInput)
         }
     }
 
-    fn consume(&mut self) -> Option<Token> {
+    fn consume(&mut self) -> Result<Token, CompileError> {
         let peeked_tok = self.peek();
 
         if self.current_token_idx < self.tokens.len() {
@@ -301,5 +314,29 @@ impl<'ctx> Parser<'ctx> {
         }
 
         peeked_tok
+    }
+
+    fn expect_and_consume_or_else<F>(
+        &mut self,
+        expected_kind: TokenKind,
+        f: F,
+    ) -> Result<Token, CompileError>
+    where
+        F: FnOnce(Token) -> CompileError,
+    {
+        match self.consume() {
+            Ok(token) => {
+                if token.kind == expected_kind {
+                    Ok(token)
+                } else {
+                    Err(f(token))
+                }
+            }
+            err => err,
+        }
+    }
+
+    fn has_reached_eof(&self) -> bool {
+        self.current_token_idx >= self.tokens.len()
     }
 }

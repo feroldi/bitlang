@@ -19,6 +19,15 @@ fn check<S: AsRef<str>>(program: S, expected_program: &str) {
     );
 }
 
+fn check_error<S: AsRef<str>>(error: S, expected_error: &str) {
+    use pretty_assertions::assert_eq;
+
+    assert_eq!(
+        error.as_ref().trim(),
+        strip_margin(expected_error).trim()
+    );
+}
+
 fn strip_margin(text: &str) -> String {
     text.split('\n')
         .map(|line| {

@@ -6,6 +6,7 @@ mod ast;
 mod codegen;
 mod compiler_context;
 mod driver;
+mod error;
 mod interner;
 mod parser;
 mod scanner;

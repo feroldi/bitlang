@@ -1,4 +1,4 @@
-use crate::tests::{check, compile};
+use crate::tests::{check, check_error, compile};
 
 #[test]
 fn test_main_empty_function_returns_0() {
@@ -86,5 +86,25 @@ fn test_main_function_explicitly_returns_42() {
         |    pop rbp
         |    ret
         |"#,
+    );
+}
+
+#[test]
+fn test_error_expected_declaration_or_definition() {
+    let output = compile(
+        r#"
+        |42
+        |"#,
+    );
+
+    check_error(
+        output,
+        r#"
+        |error: expected declaration, found `42`
+        | >>> <source>:1:1
+        |  |
+        |1 | 42
+        |  | ^^ expected declaration
+        "#,
     );
 }

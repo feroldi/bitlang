@@ -13,10 +13,16 @@ pub(crate) fn compile(source_code: &str) -> String {
     };
 
     let mut parser = Parser::new(tokens, &context);
-    let program = parser.parse_program().unwrap();
 
-    let mut codegen = CodeGen::new(&context);
-    let x86_program = codegen.gen_program(program);
+    match parser.parse_program() {
+        Ok(program) => {
+            let mut codegen = CodeGen::new(&context);
+            let x86_program = codegen.gen_program(program);
 
-    format!("{}", x86_program)
+            format!("{}", x86_program)
+        }
+        Err(diagnostic) => {
+            format!("{}", diagnostic)
+        }
+    }
 }
