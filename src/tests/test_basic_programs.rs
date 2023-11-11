@@ -90,7 +90,7 @@ fn test_main_function_explicitly_returns_42() {
 }
 
 #[test]
-fn test_error_expected_declaration_or_definition() {
+fn test_error_expected_declaration() {
     let output = compile(
         r#"
         |42
@@ -105,6 +105,26 @@ fn test_error_expected_declaration_or_definition() {
         |  |
         |1 | 42
         |  | ^^ expected declaration
+        "#,
+    );
+}
+
+#[test]
+fn test_error_expected_colon_colon_after_identifier() {
+    let output = compile(
+        r#"
+        |foo
+        |"#,
+    );
+
+    check_error(
+        output,
+        r#"
+        |error: expected `::`, found `<end of file>`
+        | >>> <source>:1:1
+        |  |
+        |1 | foo
+        |  | ^^^ expected `::` after this
         "#,
     );
 }

@@ -1,7 +1,8 @@
+use std::fmt;
 use std::iter::Peekable;
 use std::str::Chars;
 
-use crate::compiler_context::CompilerContext;
+use crate::compiler_context::{BytePos, CompilerContext, Span};
 
 pub(crate) struct Scanner<'ctx> {
     ctx: &'ctx CompilerContext,
@@ -144,8 +145,18 @@ pub(crate) struct Token {
     pub(crate) span: Span,
 }
 
+impl Token {
+    pub(crate) fn eof() -> Token {
+        Token {
+            kind: TokenKind::Eof,
+            span: Span::dummy(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum TokenKind {
+    Eof,
     UnitConstant,
     IntegerConstant,
     Identifier,
@@ -189,11 +200,67 @@ pub(crate) enum Delim {
     Curly,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct Span {
-    pub(crate) start: BytePos,
-    pub(crate) end: BytePos,
+pub(crate) struct CtxToken<'ctx> {
+    ctx: &'ctx CompilerContext,
+    token: Token,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct BytePos(pub(crate) usize);
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TokenKind::Eof => write!(f, "<end of file>"),
+            TokenKind::UnitConstant => write!(f, "()"),
+            TokenKind::IntegerConstant => write!(f, "<integer constant>"),
+            TokenKind::Identifier => write!(f, "<identifier>"),
+            TokenKind::Comma => write!(f, ","),
+            TokenKind::Excla => write!(f, "!"),
+            TokenKind::Star => write!(f, "*"),
+            TokenKind::Slash => write!(f, "/"),
+            TokenKind::Plus => write!(f, "+"),
+            TokenKind::Dash => write!(f, "-"),
+            TokenKind::Less => write!(f, "<"),
+            TokenKind::Greater => write!(f, ">"),
+            TokenKind::LessLess => write!(f, "<<"),
+            TokenKind::GreaterGreater => write!(f, ">>"),
+            TokenKind::LessEqual => write!(f, "<="),
+            TokenKind::GreaterEqual => write!(f, ">="),
+            TokenKind::Colon => write!(f, ":"),
+            TokenKind::ColonColon => write!(f, "::"),
+            TokenKind::ColonEqual => write!(f, ":="),
+            TokenKind::Semi => write!(f, ";"),
+            TokenKind::DashGreater => write!(f, "->"),
+            TokenKind::PeriodPeriod => write!(f, ".."),
+            TokenKind::PeriodPeriodEqual => write!(f, "..="),
+            TokenKind::Keyword(kw) => write!(f, "keyword {}", kw),
+            TokenKind::Open(Delim::Paren) => write!(f, "("),
+            TokenKind::Open(Delim::Curly) => write!(f, "{{"),
+            TokenKind::Closed(Delim::Paren) => write!(f, ")"),
+            TokenKind::Closed(Delim::Curly) => write!(f, "}}"),
+        }
+    }
+}
+
+impl fmt::Display for Keyword {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Keyword::I32 => write!(f, "i32"),
+            Keyword::If => write!(f, "if"),
+            Keyword::Else => write!(f, "else"),
+            Keyword::For => write!(f, "for"),
+            Keyword::Break => write!(f, "break"),
+            Keyword::Continue => write!(f, "continue"),
+        }
+    }
+}
+
+impl fmt::Display for CtxToken<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.token.kind {
+            TokenKind::IntegerConstant | TokenKind::Identifier => {
+                write!(f, "{}", self.ctx.get_text_snippet(self.token.span))
+            }
+            kind => write!(f, "{}", kind),
+        }
+    }
+}
+

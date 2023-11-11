@@ -1,13 +1,17 @@
 use std::fmt;
 
+use crate::scanner::{Token, TokenKind};
+
 pub(crate) struct Diagnostic {
     pub(crate) compile_errors: Vec<CompileError>,
 }
 
-#[derive(Debug)]
 pub(crate) enum CompileError {
-    UnexpectedEndOfInput,
     ExpectedDeclaration,
+    ExpectedButFound {
+        expected: TokenKind,
+        found: Token,
+    },
 }
 
 impl fmt::Display for Diagnostic {
@@ -28,7 +32,7 @@ impl fmt::Display for CompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CompileError::ExpectedDeclaration => write!(f, "expected declaration"),
-            ce => todo!("{:?}", ce),
+            CompileError::ExpectedButFound { expected, found } => Ok(())
         }
     }
 }

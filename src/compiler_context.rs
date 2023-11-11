@@ -14,6 +14,30 @@ pub(crate) struct CompilerContext {
     decls: Bump,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct Span {
+    pub(crate) start: BytePos,
+    pub(crate) end: BytePos,
+}
+
+impl Span {
+    pub(crate) fn dummy() -> Span {
+        Span {
+            start: BytePos::dummy(),
+            end: BytePos::dummy(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct BytePos(pub(crate) usize);
+
+impl BytePos {
+    pub(crate) fn dummy() -> BytePos {
+        BytePos(usize::MAX)
+    }
+}
+
 impl<'ctx> CompilerContext {
     pub(crate) fn new(source_code: String) -> CompilerContext {
         CompilerContext {
@@ -28,6 +52,10 @@ impl<'ctx> CompilerContext {
 
     pub(crate) fn get_source_code(&'ctx self) -> &str {
         &self.source_code
+    }
+
+    pub(crate) fn get_text_snippet(&'ctx self, span: Span) -> &'ctx str {
+        &self.get_source_code()[span.start.0..span.end.0]
     }
 
     pub(crate) fn get_or_intern_str(&'ctx self, string: &str) -> Symbol {
